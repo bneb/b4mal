@@ -1,0 +1,36 @@
+[
+  {
+    "id": "typecheck",
+    "cmd": ["bunx", "tsc", "--noEmit"],
+    "claims": ["fs:src"],
+    "deps": [],
+    "reads": ["src"],
+    "writes": [],
+    "envReads": ["HOME", "PATH"],
+    "envWrites": []
+  },
+  {
+    "id": "test",
+    "cmd": ["bun", "test",
+      "tests/formal_shadow.test.ts",
+      "tests/dag.test.ts",
+      "tests/performance.test.ts"
+    ],
+    "claims": ["fs:src", "fs:tests"],
+    "deps": ["typecheck"],
+    "reads": ["src", "tests"],
+    "writes": [],
+    "envReads": ["HOME", "PATH"],
+    "envWrites": []
+  },
+  {
+    "id": "build",
+    "cmd": ["bun", "build", "src/cli/index.ts", "--outdir", "dist", "--target", "bun"],
+    "claims": ["fs:src", "fs:dist"],
+    "deps": ["typecheck", "test"],
+    "reads": ["src"],
+    "writes": ["dist"],
+    "envReads": ["HOME", "PATH"],
+    "envWrites": []
+  }
+]

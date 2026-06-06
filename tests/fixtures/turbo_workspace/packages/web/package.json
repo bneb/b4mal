@@ -1,0 +1,10 @@
+{
+  "name": "web",
+  "scripts": {
+    "build": "vite build",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "core": "workspace:*"
+  }
+}

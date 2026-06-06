@@ -1,0 +1,12 @@
+key: rwx-demo
+tasks:
+  - key: a
+    run: echo a > foo.txt
+
+  - key: b
+    run: echo b > foo.txt
+
+  # Scenario 1: Using [a, b] ordering. 'b' wins the merge.
+  - key: c
+    use: [a, b]
+    run: cat foo.txt

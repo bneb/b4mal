@@ -1,0 +1,9 @@
+[package]
+name = "rust_normalizer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+syn = { version = "2.0", features = ["full", "visit-mut"] }
+quote = "1.0"
+

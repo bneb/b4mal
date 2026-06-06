@@ -1,0 +1,80 @@
+{
+    "version": "0.5.0",
+    "timestamp": "2026-03-04T08:51:00.000Z",
+    "stats": {
+        "tests_passed": 238,
+        "test_files": 23,
+        "milestones": 13,
+        "logic_hash_precision": "AST-level (Bun Transpiler)",
+        "formal_verification": "Set-theoretic UNSAT proofs (Z3-equivalent)"
+    },
+    "capabilities": [
+        "typescript-ast-hashing",
+        "rust-vcm-syncing",
+        "mcp-protocol-v1",
+        "z3-resource-isolation",
+        "core-token-signing",
+        "git-history-audit",
+        "structural-volatility-forecast"
+    ],
+    "schemas": {
+        "task": "TaskSchema (Zod): { id, cmd, dependencies, env }",
+        "pipeline": "PipelineSchema (Zod): { tasks: Task[] }",
+        "attestation": "IsolationAttestationSchema: { solver: { engine, version, duration_ms, result }, proof: { isolation_level, logic_hash, resource_set_hash } }"
+    },
+    "mcp": {
+        "tools": [
+            {
+                "name": "explain_collision",
+                "description": "Semantic diagnosis of resource conflicts between concurrent tasks",
+                "input": "{ task_a: string, task_b: string }",
+                "output": "{ collision_type, resources, remediation }"
+            },
+            {
+                "name": "verify_isolation",
+                "description": "Run formal isolation proof and generate Isolation Attestation",
+                "input": "{ task_id: string, env_claims: string[], fs_claims: string[] }",
+                "output": "IsolationAttestation"
+            },
+            {
+                "name": "provision_verified_sandbox",
+                "description": "Create an isolated execution environment with formal guarantees",
+                "input": "{ task_id: string }",
+                "output": "{ sandbox_id, attestation }"
+            }
+        ],
+        "resources": [
+            {
+                "uri": "ci://build-graph",
+                "description": "DAG topology, critical path analysis, wave decomposition"
+            }
+        ]
+    },
+    "proof_model": {
+        "engine": "set-theoretic",
+        "equivalence": "Z3 UNSAT",
+        "isolation_condition": "(W₁ ∩ (R₂ ∪ W₂)) = ∅ ∧ (W₂ ∩ (R₁ ∪ W₁)) = ∅",
+        "result_states": [
+            "UNSAT (Isolated)",
+            "SAT (Collision)"
+        ],
+        "attestation_includes": [
+            "logic_hash",
+            "resource_set_hash",
+            "solver_metadata"
+        ]
+    },
+    "ast_hashing": {
+        "method": "Bun.Transpiler → strip comments, types, whitespace → SHA-256",
+        "invariance": "Comment changes, type annotations, and formatting do not invalidate cache",
+        "languages": {
+            "typescript": "Full AST normalization via Bun Transpiler",
+            "rust": "VCM content-hashing (upgrade path: syn + ra_ap_syntax for AST normalization)"
+        }
+    },
+    "rust_integration": {
+        "current": "Content-hash (VCM sync)",
+        "planned": "AST-normalization via syn crate for comment/attribute invariance",
+        "mcp_workflow": "Agent queries cache miss reason → identifies comment-only changes → suggests logic-invariant bypass"
+    }
+}

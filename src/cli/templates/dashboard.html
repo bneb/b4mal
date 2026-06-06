@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>B4mal Observability Dashboard</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #050505; color: #fff; margin: 0; padding: 40px; }
+        h1 { color: #5599FF; margin-bottom: 5px; }
+        p.subtitle { color: #888; margin-top: 0; margin-bottom: 30px; }
+        
+        .dag-container { 
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .wave { 
+            background: #111; 
+            border: 1px solid #333; 
+            border-radius: 8px; 
+            padding: 20px;
+            border-left: 4px solid #5599FF; 
+        }
+        
+        .wave h3 { margin-top: 0; color: #ccc; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .task-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .task { 
+            background: #222; 
+            border-radius: 6px; 
+            border: 1px solid #444; 
+            padding: 10px 16px;
+            font-size: 14px;
+            color: #eee;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: transform 0.1s, border-color 0.1s;
+        }
+        
+        .task:hover {
+            transform: translateY(-2px);
+            border-color: #5599FF;
+        }
+        
+        .critical { 
+            border-color: #FF5555; 
+            color: #FFaaaa; 
+        }
+    </style>
+</head>
+<body>
+    <h1>B4mal Observability Dashboard</h1>
+    <p class="subtitle">Wave Execution Topology Analysis</p>
+    
+    <div id="app"></div>
+
+    <script>
+        // DATA_INJECTION_TARGET
+        const b4malData = {}; 
+
+        const app = document.getElementById('app');
+        
+        if (!b4malData || !b4malData.waves) {
+            app.innerHTML = "<p>No data injected. Generate via 'b4mal analyze'.</p>";
+        } else {
+            const container = document.createElement('div');
+            container.className = 'dag-container';
+            
+            b4malData.waves.forEach((wave, idx) => {
+                const waveDiv = document.createElement('div');
+                waveDiv.className = 'wave';
+                waveDiv.innerHTML = `<h3>Wave ${idx + 1} (${wave.taskIds.length} tasks)</h3>`;
+                
+                const grid = document.createElement('div');
+                grid.className = 'task-grid';
+                
+                wave.taskIds.forEach(taskId => {
+                    const taskSpan = document.createElement('div');
+                    taskSpan.className = 'task';
+                    taskSpan.innerText = taskId;
+                    grid.appendChild(taskSpan);
+                });
+                
+                waveDiv.appendChild(grid);
+                container.appendChild(waveDiv);
+            });
+            app.appendChild(container);
+        }
+    </script>
+</body>
+</html>

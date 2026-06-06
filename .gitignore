@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.b4mal/
+crucible_workspace/
+*.log
+*.db
+*.db-wal
+*.db-shm

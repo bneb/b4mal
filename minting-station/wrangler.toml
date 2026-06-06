@@ -1,0 +1,13 @@
+name = "b4mal-minting-station"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "b4mal-licenses"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+[vars]
+# Set via wrangler secret put:
+# wrangler secret put STRIPE_WEBHOOK_SECRET
+# wrangler secret put B4MAL_PRIVATE_KEY

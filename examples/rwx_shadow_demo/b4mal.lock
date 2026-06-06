@@ -1,0 +1,32 @@
+[
+  {
+    "id": "a",
+    "cmd": ["echo", "a"],
+    "claims": ["fs:foo.txt"],
+    "deps": [],
+    "reads": [],
+    "writes": ["foo.txt"],
+    "envReads": [],
+    "envWrites": []
+  },
+  {
+    "id": "b",
+    "cmd": ["echo", "b"],
+    "claims": ["fs:foo.txt"],
+    "deps": ["a"],
+    "reads": [],
+    "writes": ["foo.txt"],
+    "envReads": [],
+    "envWrites": []
+  },
+  {
+    "id": "c",
+    "cmd": ["cat", "foo.txt"],
+    "claims": ["fs:foo.txt"],
+    "deps": ["b"],
+    "reads": ["foo.txt"],
+    "writes": [],
+    "envReads": [],
+    "envWrites": []
+  }
+]

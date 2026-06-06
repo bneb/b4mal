@@ -1,0 +1,7 @@
+{
+  "name": "core",
+  "scripts": {
+    "build": "tsc",
+    "test": "bun test"
+  }
+}
