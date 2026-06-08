@@ -10,7 +10,7 @@ defined in `b4mal.lock` and confirms that both cold and hot cache passes work co
 ## Prerequisites
 
 - Bun v1.2+ installed
-- Z3 SMT solver on PATH (for FormalShadow verification)
+
 - From the `/Users/kevin/projects/b4mal` directory
 
 ## Steps

@@ -21,7 +21,7 @@ export const IsolationAttestationSchema = z.object({
 
     /** Proof payload */
     proof: z.object({
-        /** NONE = no verification, PROCESS = pid isolation, FORMAL = Z3 proof */
+        /** NONE = no verification, PROCESS = pid isolation, FORMAL = formal proof */
         isolation_level: z.enum(["NONE", "PROCESS", "FORMAL"]),
         /** AST-stable logic hash from v0.5.0 */
         logic_hash: z.string(),

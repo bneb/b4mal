@@ -5,7 +5,7 @@
  * Bare-metal stress test targeting:
  *   Phase 1: 1GB synthetic workspace generation (crypto random)
  *   Phase 2: ContentHasher I/O throughput (SHA-256 vs NVMe)
- *   Phase 3: FormalShadow QF_S compute hammer (200x concurrent Z3)
+ *   Phase 3: FormalShadow PrefixTree Compute
  *   Phase 4: SQLiteLedger WAL contention (10,000 concurrent writes)
  *   Phase 5: ArtifactVault tar pack/unpack (500MB zstd round-trip)
  *
@@ -34,7 +34,7 @@ const WORKSPACE = path.join(process.cwd(), "crucible_workspace");
 const NUM_DIRS = 100;
 const FILES_PER_DIR = 100;           // 10,000 total files
 const FILE_SIZE_BYTES = 100 * 1024;  // 100KB per file → ~1GB total
-const Z3_CONCURRENCY = 200;
+const SOLVER_CONCURRENCY = 200;
 const SQLITE_CONCURRENCY = 10_000;
 const ARCHIVE_SUBSET_DIRS = 50;      // ~500MB for tar test
 
@@ -142,19 +142,19 @@ async function phase2_io_sizer(totalBytes: number): Promise<void> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Phase 3: Compute Hammer — 200x Concurrent Z3 QF_S
+// Phase 3: FormalShadow Solver Compute
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function phase3_compute_hammer(): Promise<void> {
+async function phase3_solver_compute(): Promise<void> {
     console.log(`\n${"═".repeat(60)}`);
-    console.log(`  PHASE 3: COMPUTE HAMMER (${Z3_CONCURRENCY}x Z3 QF_S)`);
+    console.log(`  PHASE 3: SOLVER COMPUTE (${SOLVER_CONCURRENCY}x PrefixTree)`);
     console.log(`${"═".repeat(60)}`);
 
     // Build a mix of SAT and UNSAT problems to stress both paths
     const pairs: [TaskResourceClaim, TaskResourceClaim][] = [];
-    for (let i = 0; i < Z3_CONCURRENCY; i++) {
+    for (let i = 0; i < SOLVER_CONCURRENCY; i++) {
         if (i % 2 === 0) {
-            // SAT: overlapping prefixes — forces Z3 to find a witness
+            // SAT: overlapping prefixes — forces the solver to find a witness
             pairs.push([
                 {
                     id: `writer-${i}`,
@@ -172,7 +172,7 @@ async function phase3_compute_hammer(): Promise<void> {
                 },
             ]);
         } else {
-            // UNSAT: completely disjoint — forces Z3 to prove no overlap
+            // UNSAT: completely disjoint — forces the solver to prove no overlap
             pairs.push([
                 {
                     id: `builder-${i}`,
@@ -204,8 +204,8 @@ async function phase3_compute_hammer(): Promise<void> {
     );
     const elapsed = performance.now() - t0;
 
-    bar("Total proofs", `${Z3_CONCURRENCY}`, "");
-    bar("Proofs/sec", ops(Z3_CONCURRENCY, elapsed), "proofs/s");
+    bar("Total proofs", `${SOLVER_CONCURRENCY}`, "");
+    bar("Proofs/sec", ops(SOLVER_CONCURRENCY, elapsed), "proofs/s");
     bar("Wall clock", (elapsed / 1000).toFixed(2), "sec");
     bar("Median latency", p50(latencies).toFixed(2), "ms");
     bar("P99 latency", p99(latencies).toFixed(2), "ms");
@@ -374,7 +374,7 @@ async function runCrucible() {
         await phase2_io_sizer(totalBytes);
 
         // Phase 3
-        await phase3_compute_hammer();
+        await phase3_solver_compute();
 
         // Phase 4
         await phase4_db_contention();

@@ -1,7 +1,7 @@
 /**
- * Tests: Resource Monitor — Z3 Isolation Prover (v1.5.0 — RED PHASE)
+ * Tests: Resource Monitor — Formal Isolation Prover (v1.5.0 — RED PHASE)
  *
- * Verifies that Z3 can prove task isolation by checking
+ * Verifies that the engine can prove task isolation by checking
  * disjointness of read/write resource sets.
  */
 import { describe, test, expect } from "bun:test";

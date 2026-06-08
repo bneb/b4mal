@@ -2,7 +2,7 @@
 //
 // Validates the tiered TaskIdentity hashing:
 //   logicHash   — normalized AST (cross-platform)
-//   claimHash   — Z3 resource map (cross-platform)
+//   claimHash   — resource map (cross-platform)
 //   platformHash — OS + arch + toolchain (platform-specific)
 
 import { describe, test, expect } from "bun:test";
@@ -63,7 +63,7 @@ describe("TaskIdentity - Resource Claims", () => {
         // Logic is the same
         expect(idA.logicHash).toBe(idB.logicHash);
 
-        // Claims differ — Z3 proof must re-verify
+        // Claims differ — proof must re-verify
         expect(idA.claimHash).not.toBe(idB.claimHash);
     });
 

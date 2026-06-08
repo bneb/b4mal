@@ -99,9 +99,9 @@ describe("ReadmeGenerator - Linkage", () => {
         const readme = ReadmeGenerator.generate();
 
         // Hierarchy checks
-        expect(readme).toContain("Stop paying the Cache Miss Overhead");
+        expect(readme).toContain("Reduce Cache Miss Overhead");
         expect(readme).toContain("curl -fsSL https://b4mal.dev/install.sh | sh");
-        expect(readme).toContain("Core Heatmap"); // Formal shadow explanation
+        expect(readme).toContain("real-time visualization");
 
         // Linkage check
         expect(readme).toContain("[optimization_report.md]");

@@ -15,7 +15,7 @@ Determinism requires exact input signatures.
 2. **LogicHasher**: Computes Merkle representations of execution configurations. It buffers inputs from file descriptors to provide OOM immunity against V8 string engine limits (Max String Length 1024MB on 64-bit systems).
 
 ### The Formal Shadow (`formal_shadow.ts`)
-Prior to parallel execution, overlapping state claims are formally verified using Microsoft's Z3 SMT solver. The Formal Shadow constructs propositional logic (`QF_S`) equations of directory prefixes and file sets to prove that two execution waves are disjoint.
+Prior to parallel execution, overlapping state claims are formally verified. The Formal Shadow constructs prefix-tree constraints of directory structures and file sets to prove that two execution waves are disjoint.
 
 ## Security Guarantees
 - **Symlink Breakouts**: Impossible. Verified via inode and device ID mapping during file descriptor extraction.

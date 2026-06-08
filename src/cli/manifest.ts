@@ -1,8 +1,8 @@
 /**
  * B4mal — Manifest Generator
  *
- * Generates the "Artifact of Truth" — a structured JSON manifest
- * that captures the current state of AST-hashing, formal proofs,
+ * Generates a structured JSON manifest
+ * that captures the current state of AST-hashing, resource proofs,
  * and MCP capabilities. This provides the MCP agent with
  * the exact worldview it needs to operate.
  */
@@ -40,7 +40,7 @@ export function generateManifest(auditReport?: AuditReport): CoreManifest {
             test_files: 23,
             milestones: 13,
             logic_hash_precision: "AST-level (Bun Transpiler)",
-            formal_verification: "Set-theoretic UNSAT proofs (Z3-equivalent)",
+            formal_verification: "Set-theoretic disjoint validation",
         },
         capabilities: [
             "typescript-ast-hashing",
@@ -59,7 +59,7 @@ export function generateManifest(auditReport?: AuditReport): CoreManifest {
         mcp: {
             tools: [
                 "explain_collision — Semantic diagnosis of resource conflicts",
-                "verify_isolation — Formal proof with attestation",
+                "verify_isolation — Validation with attestation",
                 "provision_verified_sandbox — Create isolated execution env",
             ],
             resources: [

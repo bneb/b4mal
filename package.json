@@ -1,13 +1,13 @@
 {
   "name": "b4mal",
   "version": "7.0.0",
-  "description": "Core CI — Zero-Tax Orchestrator",
+  "description": "Core CI Orchestrator",
   "type": "module",
   "bin": {
-    "b4mal": "./src/cli.ts"
+    "b4mal": "./src/cli/index.ts"
   },
   "scripts": {
-    "dev": "bun run src/cli.ts",
+    "dev": "bun run src/cli/index.ts",
     "test": "bun test",
     "bench": "bun run benchmarks/cold-start.ts && bun run benchmarks/parallel-overhead.ts"
   },
@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/js-yaml": "^4.0.9"
+    "@types/js-yaml": "^4.0.9",
+    "typescript": "^6.0.3"
   }
 }

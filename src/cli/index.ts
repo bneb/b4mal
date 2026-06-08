@@ -8,7 +8,7 @@
 //
 // Flags:
 //   --force, -f       Bypass cache (force re-execution of all tasks)
-//   --debug, -d       Print stack traces and Z3 formulas on error
+//   --debug, -d       Print stack traces on error
 //
 // Exit codes:
 //   0  success
@@ -172,22 +172,6 @@ async function main() {
                 if (!result.success) {
                     fail("One or more tasks exited non-zero.");
                     
-                    const failures = result.results.filter(r => r.exitCode !== 0);
-                    if (failures.length > 0) {
-                        banner("Autonomous Shadow Sandboxing Engaged");
-                        const { BuildDoctor } = await import("../agent/build_doctor");
-                        const doctor = new BuildDoctor(engine.projectRoot);
-                        for (const f of failures) {
-                            info(`Branching failing task '${f.taskId}' into hidden shadow workspace...`);
-                            const shadowPath = await doctor.diagnoseAndHeal(f.taskId, f.stdout || "", f.stderr || "");
-                            ok(`Shadow sandbox created at: ${shadowPath}`);
-                            info("BuildDoctor is analyzing the failure (AI logic stubbed).");
-                            
-                            const prUrl = await doctor.createHealPR(f.taskId, shadowPath);
-                            ok(`[AI-Generated] PR opened automatically: ${prUrl}`);
-                        }
-                    }
-
                     process.exit(1);
                 }
 
@@ -315,7 +299,7 @@ function printUsage(): void {
   ${c.bold}b4mal${c.reset} — Core Build Engine v${pkg.version}
 
   ${c.bold}Usage:${c.reset}
-    b4mal demo           🛑 See Z3 intercept a race condition live (start here)
+    b4mal demo           🛑 See the engine intercept a race condition live (start here)
     b4mal init           Discover source files → b4mal.lock
     b4mal setup ci       Generate zero-configuration GitHub Actions workflow
     b4mal build          Prove + execute DAG (cache-aware)
@@ -333,7 +317,7 @@ function printUsage(): void {
 
   ${c.bold}Exit Codes:${c.reset}
     0  Success
-    1  Build failure, Z3 collision, or fatal error
+    1  Build failure, collision, or fatal error
 \n`);
 }
 

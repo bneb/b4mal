@@ -10,7 +10,7 @@
 #
 # The script:
 #   1. Installs SSH key for passwordless access (if password provided)
-#   2. Installs Z3 + Node (apt-get)
+#   2. Installs Node (apt-get)
 #   3. rsyncs the repo (excluding node_modules, .git, crucible_workspace)
 #   4. Runs bun install
 #   5. Runs the crucible benchmark and tees output to a timestamped log
@@ -72,10 +72,8 @@ fi
 
 # ── Step 2: Install system deps ───────────────────────────────────────────────
 
-echo "[2/5] Installing Z3 + Node..."
-remote_sudo "apt-get install -y -q z3 nodejs 2>&1 | tail -2"
-Z3VER="$(remote 'z3 --version' 2>&1)"
-echo "   [OK] $Z3VER"
+echo "[2/5] Installing Node..."
+remote_sudo "apt-get install -y -q nodejs 2>&1 | tail -2"
 
 # ── Step 3: Sync repo ─────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import { describe, test, expect, spyOn, beforeEach, afterEach } from "bun:test";
 import {
-    JPLReporter,
+    TerminalReporter,
     reportPipelineStart,
     reportTaskStart,
     reportTaskEnd,
@@ -30,16 +30,16 @@ describe("reporter.ts", () => {
         errorSpy.mockRestore();
     });
 
-    // ─── JPLReporter ────────────────────────────────────────────────────────
-    describe("JPLReporter", () => {
+    // ─── TerminalReporter ────────────────────────────────────────────────────────
+    describe("TerminalReporter", () => {
         test("renderHUD", () => {
-            const reporter = new JPLReporter();
+            const reporter = new TerminalReporter();
             reporter.renderHUD(5, "TestPipeline");
             expect(logSpy).toHaveBeenCalled();
         });
 
         test("renderIsolationBar", () => {
-            const reporter = new JPLReporter();
+            const reporter = new TerminalReporter();
             const tax: TaxReport = {
                 totalMsSaved: 1200,
                 logicalHits: 2,
@@ -59,19 +59,19 @@ describe("reporter.ts", () => {
         });
 
         test("renderWaveStart", () => {
-            const reporter = new JPLReporter();
+            const reporter = new TerminalReporter();
             reporter.renderWaveStart(1, 3);
             expect(logSpy).toHaveBeenCalled();
         });
 
         test("renderTaskStart", () => {
-            const reporter = new JPLReporter();
+            const reporter = new TerminalReporter();
             reporter.renderTaskStart("task-id");
             expect(writeSpy).toHaveBeenCalled();
         });
 
         test("renderTaskEnd", () => {
-            const reporter = new JPLReporter();
+            const reporter = new TerminalReporter();
             reporter.renderTaskEnd({ id: "1", durationMs: 50, exitCode: 0, stdout: "", stderr: "", cacheHit: false });
             reporter.renderTaskEnd({ id: "2", durationMs: 0.0005, exitCode: 0, stdout: "", stderr: "", cacheHit: false }); // < 0.001
             reporter.renderTaskEnd({ id: "3", durationMs: 0.5, exitCode: 0, stdout: "", stderr: "", cacheHit: false }); // < 1
@@ -82,7 +82,7 @@ describe("reporter.ts", () => {
         });
 
         test("renderMetabolicProfile", () => {
-            const reporter = new JPLReporter();
+            const reporter = new TerminalReporter();
             const res: TaskResult = { id: "1", durationMs: 50, exitCode: 0, stdout: "", stderr: "", cacheHit: false };
             reporter.renderMetabolicProfile(res, undefined); // should skip
             reporter.renderMetabolicProfile(res, {}); // should skip
@@ -93,7 +93,7 @@ describe("reporter.ts", () => {
         });
 
         test("renderBottleneck", () => {
-            const reporter = new JPLReporter();
+            const reporter = new TerminalReporter();
             reporter.renderBottleneck({ id: "1", durationMs: 0, ioWaitMs: 0, hitType: "execution" }); // should skip
             reporter.renderBottleneck({ id: "2", durationMs: 150, ioWaitMs: 0, hitType: "execution" });
             reporter.renderBottleneck({ id: "3", durationMs: 250, ioWaitMs: 50, hitType: "execution" });
@@ -101,7 +101,7 @@ describe("reporter.ts", () => {
         });
 
         test("renderFlightSummary", () => {
-            const reporter = new JPLReporter();
+            const reporter = new TerminalReporter();
             const pipelineRes: PipelineResult = {
                 name: "test",
                 success: true,

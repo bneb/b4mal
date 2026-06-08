@@ -1,5 +1,5 @@
 /**
- * B4mal v1.0 — JPL Mission Control Reporter
+ * B4mal v1.0 — Terminal Reporter
  *
  * High-intensity ANSI terminal dashboard. Zero dependencies.
  * Renders: Isolation HUD, Wave Visualization, Metabolic Profile, Flight Summary.
@@ -77,9 +77,9 @@ function line(ch: string = "─", width: number = 56): string {
     return `${D}${ch.repeat(width)}${R}`;
 }
 
-// ─── JPL Reporter ────────────────────────────────────────────────────────────
+// ─── Terminal Reporter ────────────────────────────────────────────────────────────
 
-export class JPLReporter {
+export class TerminalReporter {
     private startNs: number;
 
     constructor() {
@@ -214,7 +214,7 @@ export class JPLReporter {
 // These functions are preserved so existing engine code works during migration.
 
 export function reportPipelineStart(name: string, taskCount: number): void {
-    const reporter = new JPLReporter();
+    const reporter = new TerminalReporter();
     reporter.renderHUD(taskCount, name);
 }
 

@@ -2,7 +2,7 @@
 //
 // Demonstrates a "Resource War" between Rust, Python, and TypeScript.
 // Verifies that the b4mal engine (FormalShadow) correctly merges
-// attestations from all 3 runtimes and detects Z3 collisions.
+// attestations from all 3 runtimes and detects collisions.
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { spawnSync } from "node:child_process";
@@ -50,7 +50,7 @@ describe("Polyglot - Inter-Process Fidelity", () => {
     });
 
     test("Sequential Dependency (Write -> Read) is isolated", async () => {
-        // Run in a single wave (which we shouldn't do for dependencies, but testing Z3 behavior)
+        // Run in a single wave (which we shouldn't do for dependencies, but testing engine behavior)
         // If they run concurrently, W -> R is a collision.
 
         const claimRust = AttestHandler.toClaim(AttestHandler.parseArgs(["BinaryCompiler", "fs:write:dist/app.bin"]));
@@ -64,9 +64,9 @@ describe("Polyglot - Inter-Process Fidelity", () => {
     });
 });
 
-// ─── Z3 Collision Detection ──────────────────────────────────────────────────
+// ─── Collision Detection ──────────────────────────────────────────────────
 
-describe("Polyglot - Z3 Collision Detection", () => {
+describe("Polyglot - Collision Detection", () => {
     test("detects Write-Write collision on SQLite DB (Python vs TS)", async () => {
         const claimPy = AttestHandler.toClaim(AttestHandler.parseArgs([
             "DataProcessor",

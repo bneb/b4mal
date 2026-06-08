@@ -73,7 +73,7 @@ export class TaskIdentity {
         }
         const logicHash = hashString(normalizedCode);
 
-        // ── Layer 2: Claim Hash (Z3 resource map, cross-platform) ────
+        // ── Layer 2: Claim Hash (resource map, cross-platform) ────
         const sortedResources = [...resources].sort();
         const claimHash = hashString(sortedResources.join("\0"));
 

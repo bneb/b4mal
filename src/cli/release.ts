@@ -2,7 +2,7 @@
  * B4mal — Release Manager
  *
  * Automates the "Seal" workflow:
- *   1. Generate artifacts/truth.json (the Artifact of Truth)
+ *   1. Generate artifacts/truth.json (the Execution Manifest)
  *   2. Create annotated git tag
  *   3. Provide MCP-ready JSON for agent worldview
  */
@@ -49,7 +49,7 @@ export class ReleaseManager {
                 typescript: "logic-aware (AST normalization via Bun Transpiler)",
                 rust: "vcm-content-sync (upgrade path: syn crate)",
                 mcp: "protocol-v1-enabled",
-                formal: "formal-isolation-enforced (set-theoretic UNSAT)",
+                formal: "formal-isolation-enforced (set-theoretic disjoint validation)",
             },
             mcp: {
                 tools: [
@@ -61,7 +61,7 @@ export class ReleaseManager {
             },
         };
 
-        // 3. Write the Artifact of Truth
+        // 3. Write the Execution Manifest
         await Bun.write(artifactPath, JSON.stringify(manifest, null, 2));
 
         // 4. Git tagging (best-effort)

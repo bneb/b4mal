@@ -6,13 +6,13 @@
         "test_files": 23,
         "milestones": 13,
         "logic_hash_precision": "AST-level (Bun Transpiler)",
-        "formal_verification": "Set-theoretic UNSAT proofs (Z3-equivalent)"
+        "formal_verification": "Set-theoretic disjoint validation"
     },
     "capabilities": [
         "typescript-ast-hashing",
         "rust-vcm-syncing",
         "mcp-protocol-v1",
-        "z3-resource-isolation",
+        "resource-isolation",
         "core-token-signing",
         "git-history-audit",
         "structural-volatility-forecast"
@@ -32,13 +32,13 @@
             },
             {
                 "name": "verify_isolation",
-                "description": "Run formal isolation proof and generate Isolation Attestation",
+                "description": "Validation with attestation",
                 "input": "{ task_id: string, env_claims: string[], fs_claims: string[] }",
                 "output": "IsolationAttestation"
             },
             {
                 "name": "provision_verified_sandbox",
-                "description": "Create an isolated execution environment with formal guarantees",
+                "description": "Create an isolated execution environment",
                 "input": "{ task_id: string }",
                 "output": "{ sandbox_id, attestation }"
             }
@@ -52,7 +52,7 @@
     },
     "proof_model": {
         "engine": "set-theoretic",
-        "equivalence": "Z3 UNSAT",
+        "equivalence": "disjoint paths",
         "isolation_condition": "(W₁ ∩ (R₂ ∪ W₂)) = ∅ ∧ (W₂ ∩ (R₁ ∪ W₁)) = ∅",
         "result_states": [
             "UNSAT (Isolated)",

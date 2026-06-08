@@ -4,7 +4,7 @@
  *
  * Zero YAML. Config files are TypeScript modules.
  * Usage:
- *   b4mal run <config.ts> [--dry-run] [--no-cache] [--concurrency <n>] [--jpl] [--tui]
+ *   b4mal run <config.ts> [--dry-run] [--no-cache] [--concurrency <n>] [--verbose] [--tui]
  *   b4mal audit [--days <n>]
  */
 import { PipelineSchema } from "./schema";
@@ -23,7 +23,7 @@ function parseArgs(argv: string[]) {
     let configPath: string | undefined;
     let dryRun = false;
     let noCache = false;
-    let jpl = false;
+    let verbose = false;
     let tui = false;
     let concurrency = 0;
     let days = 30;
@@ -35,8 +35,8 @@ function parseArgs(argv: string[]) {
             dryRun = true;
         } else if (arg === "--no-cache") {
             noCache = true;
-        } else if (arg === "--jpl") {
-            jpl = true;
+        } else if (arg === "--verbose") {
+            verbose = true;
         } else if (arg === "--tui") {
             tui = true;
         } else if (arg === "--concurrency" || arg === "-c") {
@@ -66,7 +66,7 @@ function parseArgs(argv: string[]) {
         }
     }
 
-    return { command, configPath, dryRun, noCache, jpl, tui, concurrency, days };
+    return { command, configPath, dryRun, noCache, verbose, tui, concurrency, days };
 }
 
 function printUsage(): void {
@@ -98,7 +98,7 @@ function printUsage(): void {
 
   Example:
     b4mal run ./pipeline.ts
-    b4mal run ./pipeline.ts --jpl --no-cache
+    b4mal run ./pipeline.ts --verbose --no-cache
     b4mal audit
     b4mal audit --days 7
 `);
@@ -107,7 +107,7 @@ function printUsage(): void {
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-    const { command, configPath, dryRun, noCache, jpl, tui, concurrency, days } = parseArgs(
+    const { command, configPath, dryRun, noCache, verbose, tui, concurrency, days } = parseArgs(
         process.argv
     );
 
@@ -263,9 +263,16 @@ export default ${JSON.stringify(pipeline, null, 4)} as Pipeline;
 
 
 
+    // ── Trace Command ─────────────────────────────────────────────────────────
+    if (command === "trace") {
+        const { TraceCommand } = await import("./cli/trace");
+        await TraceCommand.execute(process.argv.slice(3));
+        process.exit(0);
+    }
+
     // ── Run Command ───────────────────────────────────────────────────────────
     if (command !== "run") {
-        reportError(`Unknown command: "${command}". Use "b4mal run <config.ts>", "b4mal audit", "b4mal attest", "b4mal report", "b4mal init", "b4mal ingest" or "b4mal welcome".`);
+        reportError(`Unknown command: "${command}". Use "b4mal run <config.ts>", "b4mal audit", "b4mal attest", "b4mal report", "b4mal init", "b4mal ingest", "b4mal trace", or "b4mal welcome".`);
         process.exit(1);
     }
 
@@ -301,7 +308,7 @@ export default ${JSON.stringify(pipeline, null, 4)} as Pipeline;
     const pipeline = parsed.data;
 
     // ── Execute ───────────────────────────────────────────────────────────────
-    const engine = new Engine({ dryRun, noCache, jpl, tui, concurrency });
+    const engine = new Engine({ dryRun, noCache, verbose, tui, concurrency });
 
     try {
         const result = await engine.execute(pipeline);

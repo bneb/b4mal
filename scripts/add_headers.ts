@@ -14,7 +14,7 @@ const descriptions: Record<string, string> = {
     "src/core/core_token.ts": "Manages cryptographic capabilities and access tokens for L2 cache synchronization.",
     "src/core/crypto.ts": "Provides standardized, low-level cryptographic primitives for hashing and signing.",
     "src/core/engine.ts": "The primary coordinator connecting the DAG planner, executors, and cache vaults.",
-    "src/core/formal_shadow.ts": "Implements Z3-based formal verification to prove absolute path disjointness between concurrent execution waves.",
+    "src/core/formal_shadow.ts": "Implements formal verification to prove absolute path disjointness between concurrent execution waves.",
     "src/core/identity.ts": "Resolves current machine and user identities for execution provenance tracking.",
     "src/core/logic_hasher.ts": "Computes structural hashes of task logic to enable L1/L2 cache keying.",
     "src/core/manifest.ts": "Parses and validates package and workspace manifests (e.g., package.json, Cargo.toml).",

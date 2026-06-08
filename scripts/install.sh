@@ -44,24 +44,6 @@ fi
 BUN_VERSION=$(bun --version 2>/dev/null || echo "unknown")
 ok "bun found: v${BUN_VERSION}"
 
-# Z3 is required at runtime for formal verification
-if ! command -v z3 &> /dev/null; then
-    warn "z3 theorem prover not found in PATH."
-    echo ""
-    echo "  b4mal requires Z3 for the Resource Monitor (DAG collision proofs)."
-    echo "  Install it before use:"
-    if [[ "$(uname -s)" == "Darwin" ]]; then
-        echo "    brew install z3"
-    else
-        echo "    sudo apt install z3          # Debian/Ubuntu"
-        echo "    sudo dnf install z3          # Fedora/RHEL"
-        echo "    sudo pacman -S z3            # Arch"
-    fi
-    echo ""
-else
-    Z3_VERSION=$(z3 --version 2>/dev/null | head -1 || echo "unknown")
-    ok "z3 found: ${Z3_VERSION}"
-fi
 
 # ─── Source ──────────────────────────────────────────────────────────────────
 
@@ -143,7 +125,7 @@ echo ""
 echo -e "${BOLD}${GREEN}  [OK] b4mal is installed!${RESET}"
 echo ""
 echo -e "  ${DIM}Quick start:${RESET}"
-echo -e "    ${BOLD}b4mal demo${RESET}    — See Z3 intercept a race condition live"
+echo -e "    ${BOLD}b4mal demo${RESET}    — See the engine intercept a race condition live"
 echo -e "    ${BOLD}b4mal init${RESET}    — Discover your project → b4mal.lock"
 echo -e "    ${BOLD}b4mal build${RESET}   — Prove + execute your DAG (with caching)"
 echo ""

@@ -1,7 +1,7 @@
 /**
  * B4mal v2.6.0 — Core Manual
  *
- * Integrated CLI documentation for interpreting Z3 proofs,
+ * Integrated CLI documentation for interpreting proofs,
  * optimizing heatmap concurrency, and understanding the
  * Core Shield system.
  */
@@ -25,9 +25,9 @@ concurrent task execution. Each zone represents a directory namespace.
          by the Resource Monitor engine.
 
   [!!]   Contention Detected. Multiple tasks are writing to the same zone
-         and Z3 has not yet proven isolation. Investigate immediately.
+         and isolation has not yet been proven. Investigate immediately.
 
-  []  Formally Verified. The Z3 solver has produced an UNSAT proof
+  []  Formally Verified. The solver has produced a disjoint proof
          confirming zero collision risk for this zone. Maximum trust.
 
   [   ]  Empty. No active tasks in this namespace.
@@ -36,7 +36,7 @@ concurrent task execution. Each zone represents a directory namespace.
 
   SHIELD > CONTENTION > WRITE > READ > EMPTY
 
-  Once Z3 returns UNSAT, any CONTENTION or WRITE state is promoted to
+  Once the solver confirms disjoint paths, any CONTENTION or WRITE state is promoted to
   SHIELD. This is the "Core Guarantee."
 
 ## Deterministic Shadowing
@@ -56,7 +56,7 @@ with providers like RWX, b4mal switches from shared-state isolation to the
 \`VM_PER_TASK\` strategy.
 
 In this mode, b4mal acts as a semantic orchestrator:
-  1. It proves the OverlayFS merge integrity via Z3 before dispatching.
+  1. It proves the OverlayFS merge integrity before dispatching.
   2. It calculates the optimal layer merge order based on dependency depth.
   3. It guarantees that the final aggregated artifact is deterministic and sound.
 
@@ -77,7 +77,7 @@ In this mode, b4mal acts as a semantic orchestrator:
 The Shield HUD renders the full proof tree for each task:
 
   SHIELD VERIFIED: build
-   ├─┬─ ISOLATION PROOF [UNSAT]
+    ├─┬─ ISOLATION PROOF [DISJOINT]
    │ ├── dist/bundle.js  (fs)  [OK] DISJOINT
    │ └── env:NODE_ENV    (env) [OK] DISJOINT
    └── Solver: set-theoretic v1.0.0
@@ -89,7 +89,6 @@ The Shield HUD renders the full proof tree for each task:
   b4mal shadow        Audit DAG for deterministic output masking
   b4mal migrate       Transpile RWX Mint YAML to b4mal
   b4mal audit         30-day telemetry summary
-  b4mal pitch         Generate Technical Appendix for investors
   b4mal manual        Display this manual
 `.trim(),
 };

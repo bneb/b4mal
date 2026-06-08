@@ -9,15 +9,15 @@ YELLOW='\033[1;33m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-echo -e "${BLUE}${BOLD}B4MAL × RWX HIGH-FIDELITY DEMO${NC}"
-echo -e "Simulating VM-per-task architecture and OverlayFS layer merging.\n"
+echo -e "${BLUE}${BOLD}B4MAL MIGRATION DEMO${NC}"
+echo -e "Simulating layer merging.\n"
 
 # ─── Mode Detection ─────────────────────────────────────────────────────────────
 USE_DOCKER=true
 if ! docker info >/dev/null 2>&1; then
     echo -e "${YELLOW}Notice: Docker daemon is not running or not accessible.${NC}"
     echo -e "Falling back to userspace simulation (cp -a) instead of native OverlayFS mounts."
-    echo -e "For a mathematically and empirically rigorous demonstration using the true Linux"
+    echo -e "For a rigorous demonstration using the true Linux"
     echo -e "OverlayFS kernel module, please start Docker and run this script again.\n"
     USE_DOCKER=false
 fi
@@ -26,8 +26,8 @@ fi
 rm -rf workdir
 mkdir -p workdir/{layer_a,layer_b,merged}
 
-# ─── Phase 1: The RWX Baseline ──────────────────────────────────────────────
-echo -e "${YELLOW}─── Phase 1: The RWX Baseline (Silent Shadowing) ───${NC}"
+# ─── Phase 1: Baseline Mint YAML ────────────────────────────────────────────
+echo -e "${YELLOW}─── Phase 1: Baseline Mint YAML (Shadowing) ───${NC}"
 
 if [ "$USE_DOCKER" = true ]; then
     echo -e "Executing tasks in isolated containers...\n"
@@ -65,7 +65,7 @@ echo -e "  The build is 'green', but the semantic intent is broken.\n"
 
 # ─── Phase 2: The B4mal Solution ────────────────────────────────────────────
 echo -e "${YELLOW}─── Phase 2: The b4mal Core Guard ───${NC}"
-echo -e "Using Z3 string theory to mathematically prove layer integrity.\n"
+echo -e "Using PrefixTree to prove layer integrity.\n"
 
 echo -e "1. Migrating mint.yml → b4mal..."
 # Create a b4mal.lock representing the transpiled DAG
@@ -111,11 +111,11 @@ echo -e "2. Running Formally Verified Shadow Audit..."
 SHADOW_OUT=$(bun ../../src/cli/index.ts shadow 2>&1 || true)
 
 if echo "$SHADOW_OUT" | grep -q "shadowing event"; then
-    echo -e "  ${RED}[FAIL] Mathematical Collision Detected!${NC}"
-    echo -e "  Z3 proved that merging these VMs will result in data masking."
+    echo -e "  ${RED}[FAIL] Path Collision Detected!${NC}"
+    echo -e "  PrefixTree proved that merging these VMs will result in data masking."
     echo -e "\n${SHADOW_OUT}\n"
     
-    echo -e "  ${GREEN}Solution:${NC} The RWXCoreProvider automatically recalculates"
+    echo -e "  ${GREEN}Solution:${NC} B4mal recalculates"
     echo -e "  the layer merge order based on DAG depth, preventing silent overwrites"
     echo -e "  before they hit the OverlayFS kernel module."
 else

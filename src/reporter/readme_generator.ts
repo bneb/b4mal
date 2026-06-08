@@ -9,12 +9,12 @@ export class ReadmeGenerator {
 <div align="center">
   <img src="https://img.shields.io/badge/%F0%9F%9B%A1%EF%B8%8F_Core-Local_Execution-1A1A1A?style=for-the-badge&labelColor=1A1A1A&color=00FF00" alt="Core Local Execution" />
   <h1>b4mal</h1>
-  <p><strong>Stop paying the Cache Miss Overhead. Recover 15%+ of your CI/CD latency.</strong></p>
+  <p><strong>Reduce Cache Miss Overhead.</strong></p>
 </div>
 
 <br />
 
-The average engineering team wastes thousands of hours compiling code that hasn't mathematically changed. Changing a comment, refactoring whitespace, or tweaking a log string busts standard caches and forces a full compilation chain.
+The average engineering team wastes thousands of hours compiling code that hasn't fundamentally changed. Changing a comment, refactoring whitespace, or tweaking a log string busts standard caches and forces a full compilation chain.
 
 **b4mal** replaces conventional string-based caching with a **Logic-Aware Path-based Isolation**.
 
@@ -22,7 +22,7 @@ The average engineering team wastes thousands of hours compiling code that hasn'
 
 ### The One-Liner
 
-Deploy the Core Edge Engine in 3 seconds:
+Install b4mal:
 
 \`\`\`bash
 curl -fsSL https://b4mal.dev/install.sh | sh
@@ -30,11 +30,11 @@ curl -fsSL https://b4mal.dev/install.sh | sh
 
 ---
 
-### The Architecture: Mathematical Certainty
+### The Architecture: Determinism
 
 1. **State-Machine Lexing**: Code is tokenized. Comments and non-functional changes are discarded corely.
 2. **Logic Proofing**: The engine generates a stable \`LogicHash\`. If the logic hasn't changed, the pipeline yields immediately.
-3. **Path-based Isolation**: During testing, b4mal intercepts system calls via process tracing to ensure concurrent isolated tests never collide over \`fs:\`, \`env:\`, or \`port:\` resources. View the **Core Heatmap** in the local HUD for real-time visualization of resource zones.
+3. **Path-based Isolation**: b4mal statically analyzes resource claims to ensure concurrent isolated tasks never collide over \`fs:\`, \`env:\`, or \`port:\` resources. View the **HUD** for real-time visualization of resource zones.
 
 ### The Stack
 
@@ -46,7 +46,7 @@ B4mal supports zero-dependency integration across the modern stack. Shims exist 
 
 ---
 
-### The Evidence (nMeshed Repository Audit)
+### Example Audit
 
 \`\`\`
   ███████╗  ▲ b4mal CORE AUDIT (30D)  

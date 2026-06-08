@@ -1,7 +1,7 @@
 /**
  * Tests: Telemetry Aggregator (v1.0 — RED PHASE)
  *
- * Verifies the Cache Miss Overhead calculation is mathematically precise (+/- 1ms).
+ * Verifies the Cache Miss Overhead calculation is precise.
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { Database } from "bun:sqlite";

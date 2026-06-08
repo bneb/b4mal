@@ -1,6 +1,6 @@
-// src/cli/demo.ts — v6.0.0 "The RWX Trojan Horse"
+// src/cli/demo.ts — v6.0.0
 //
-// The Z3 Flake Interceptor — zero-setup, zero-config live demonstration.
+// The Flake Interceptor — zero-setup, zero-config live demonstration.
 //
 // Scenario: A standard-looking CI pipeline with three tasks.
 //   db_migrate         writes tests/fixtures/          (directory prefix)
@@ -8,7 +8,6 @@
 //   integration_suite_b reads src/, writes tests/fixtures/tmp.sqlite
 //
 // integration_suite_a and _b both write the same SQLite fixture file.
-// Every standard CI runner (Make, Turborepo, GitHub Actions) would
 // parallelize them. B4mal asks the Formal Engine if that's safe — and gets SAT.
 //
 // No project. No config. No network. No trust. Just math.
@@ -64,7 +63,7 @@ const DEMO_WAVE: TaskResourceClaim[] = [
     },
 ];
 
-// The path that Z3 proves is contested (extracted from its model)
+// The path that the engine proves is contested
 const WITNESS = "tests/fixtures/tmp.sqlite";
 
 // ─── Theatrical Output ───────────────────────────────────────────────────────
@@ -124,7 +123,7 @@ function renderCollision(
 ): void {
     err(`\n`);
     err(`${c.bgRed}${c.bold}${c.white}`);
-    err(`  [FAIL] FATAL: MATHEMATICAL COLLISION DETECTED                              `);
+    err(`  [FAIL] FATAL: PATH COLLISION DETECTED                                      `);
     err(`${c.reset}\n\n`);
 
     err(`${c.red}${c.bold}  Wave cannot be parallelized. Race condition formally proven.${c.reset}\n\n`);
@@ -132,7 +131,7 @@ function renderCollision(
     err(`${c.red}  Conflict:${c.reset} ${c.bold}[${taskA}]${c.reset}${c.red}  (Content) ${c.reset}${c.bold}[${taskB}]${c.reset}\n`);
     err(`\n`);
     err(`${c.red}  Formal Engine Counterexample Model:${c.reset}\n`);
-    err(`${c.red}  ↳ Path overlap mathematically proven at:  ${c.bold}${c.white}${witness}${c.reset}\n`);
+    err(`${c.red}  ↳ Path overlap proven at:  ${c.bold}${c.white}${witness}${c.reset}\n`);
     err(`\n`);
     err(`${c.dim}  If both tasks ran in parallel, each would open ${witness}\n`);
     err(`  with exclusive write intent. The last writer wins — silently\n`);
@@ -152,7 +151,7 @@ function renderCollision(
 
     out(`\n`);
     out(`  ${c.bold}B4mal operates ${c.green}proactively${c.reset}${c.bold}.${c.reset}\n`);
-    out(`  We don't quarantine flaky tests — we mathematically prevent them\n`);
+    out(`  We don't quarantine flaky tests — we prevent them\n`);
     out(`  from running in the first place.\n\n`);
     out(`  ${c.dim}Standard CI:   run → flake → detect → quarantine → retry → repeat${c.reset}\n`);
     out(`  ${c.bold}b4mal:      prove → halt → fix → run${c.reset}\n\n`);
@@ -177,7 +176,7 @@ export async function runDemo(): Promise<never> {
 
     if (result.verified) {
         // Unexpected: scenario should always collide
-        err(`${c.yellow}\n  [WARN] Unexpected: Formal Engine returned UNSAT for the demo scenario.\n`);
+        err(`${c.yellow}\n  [WARN] Unexpected: Formal Engine returned safe for the demo scenario.\n`);
         err(`  This usually means the Engine evaluated the formula differently\n`);
         err(`  than expected. Try: b4mal demo --verbose\n${c.reset}`);
         process.exit(1);

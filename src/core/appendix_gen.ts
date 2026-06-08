@@ -36,7 +36,7 @@ export interface AppendixResult {
 
 export class AppendixGenerator {
     /**
-     * Generate the investor-grade Technical Appendix.
+     * Generate a telemetry and performance report.
      *
      * Pulls data from CoreAudit report and produces:
      *   - Structured data summary
@@ -86,8 +86,8 @@ export class AppendixGenerator {
     ): string {
         const fmtMs = (ms: number) => ms < 1000 ? `${ms.toFixed(1)}ms` : `${(ms / 1000).toFixed(2)}s`;
 
-        return `# B4MAL TECHNICAL APPENDIX: THE CORE STANDARD
-
+        return `# B4MAL PERFORMANCE REPORT
+        
 **Organization:** ${orgId}
 **Report Period:** ${period}
 **Generated:** ${new Date().toISOString()}
@@ -95,7 +95,7 @@ export class AppendixGenerator {
 
 ---
 
-## 1. Logic-Aware Hashing (IP Moat #1)
+## 1. Logic-Aware Hashing
 
 Standard CI uses SHA-256 on raw file content. A whitespace change, a comment
 addition, or a type annotation triggers a full re-execution — the "Cache Miss Overhead."
@@ -117,10 +117,10 @@ ${volatilityPct > 0 ? `**Structural Volatility (ΔL):** ${volatilityPct.toFixed(
 
 ---
 
-## 2. Formal Verification (IP Moat #2)
+## 2. State Isolation
 
 Standard CI retries flaky tests. B4mal **proves** task isolation using
-set-theoretic verification equivalent to Z3 UNSAT proofs.
+set-theoretic disjoint validation.
 
 For concurrent tasks T₁ and T₂:
 > **(W₁ ∩ (R₂ ∪ W₂)) = ∅ ∧ (W₂ ∩ (R₁ ∪ W₁)) = ∅**
@@ -134,11 +134,11 @@ For concurrent tasks T₁ and T₂:
 
 ---
 
-## 3. Agentic State Fabric (IP Moat #3)
+## 3. Tool Integration
 
-B4mal exposes a native **Model Context Protocol (MCP)** server that allows
-AI agents to query the build graph, inspect formal proofs, and execute
-self-healing attempts in verified sandboxes — with sub-millisecond tool latency.
+B4mal exposes a native Model Context Protocol (MCP) server that allows
+external tools to query the build graph, inspect proofs, and execute
+tasks in verified sandboxes.
 
 | Tool | Latency | Purpose |
 |:---|:---|:---|

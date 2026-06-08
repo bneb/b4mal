@@ -81,7 +81,7 @@ export function scanVolatility(files: Array<{ path: string; content: string }>):
  *
  * @param taskCount Number of tasks in the migrated pipeline
  * @param files Source files to scan for volatility (optional — uses synthetic estimate if not provided)
- * @param avgTaskMs Average task execution time in milliseconds (default: 450ms — RWX overhead constant)
+ * @param avgTaskMs Average task execution time in milliseconds (default: 450ms)
  */
 export function generateForecast(
     taskCount: number,

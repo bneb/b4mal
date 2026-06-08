@@ -4,7 +4,7 @@
 #
 # Simulates a scenario where Rust, Python, and TypeScript services
 # all attempt to claim overlapping resources simultaneously,
-# demonstrating the Resource Monitor Z3 collision detection in action.
+# demonstrating the Resource Monitor collision detection in action.
 #
 # Usage:
 #   cd examples/polyglot-war
@@ -66,6 +66,6 @@ echo ""
 echo "  Check the b4mal HUD for the Path-based Isolation results."
 echo "  You should see:"
 echo "    - [SAFE]   BinaryCompiler (env:LICENSE_KEY)"
-echo "    - [WARN] [SAT]    BinaryCompiler vs DataProcessor (dist/app.bin)"
-echo "    - [WARN] [SAT]    DataProcessor vs WebIntegrator (db/local.sqlite)"
+echo "    - [WARN] [COLLISION]    BinaryCompiler vs DataProcessor (dist/app.bin)"
+echo "    - [WARN] [COLLISION]    DataProcessor vs WebIntegrator (db/local.sqlite)"
 echo ""

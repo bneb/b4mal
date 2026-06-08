@@ -1,11 +1,11 @@
 // tests/showpiece.test.ts — v6.0.0 "The Showpiece" Test Suite
 //
 // RED → GREEN TDD covering:
-//   §1–§5   b4mal demo command (Z3 collision intercept output)
+//   §1–§5   b4mal demo command (collision intercept output)
 //   §6–§11  scripts/install.sh (static validation — no network required)
 //
 // The demo command is the centrepiece: an engineer runs `b4mal demo`
-// and sees a real Z3 proof halt execution on a baked-in race condition.
+// and sees a real formal proof halt execution on a baked-in race condition.
 // No project, no config, no network. Just math.
 
 import { describe, test, expect, beforeAll } from "bun:test";
@@ -42,10 +42,10 @@ async function runCLI(args: string[]): Promise<CLIResult> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// §1-§5  b4mal demo — Z3 Collision Interceptor
+// §1-§5  b4mal demo — Collision Interceptor
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("b4mal demo — Z3 Collision Interceptor", () => {
+describe("b4mal demo — Collision Interceptor", () => {
     let result: CLIResult;
 
     beforeAll(async () => {
@@ -58,11 +58,11 @@ describe("b4mal demo — Z3 Collision Interceptor", () => {
     });
 
     // §2 — The headline collision message is present
-    test("§2 output contains MATHEMATICAL COLLISION DETECTED", () => {
-        expect(result.combined).toMatch(/MATHEMATICAL COLLISION DETECTED/i);
+    test("§2 output contains PATH COLLISION DETECTED", () => {
+        expect(result.combined).toMatch(/PATH COLLISION DETECTED/i);
     });
 
-    // §3 — The witness path is printed (the exact file Z3 found)
+    // §3 — The witness path is printed (the exact file the engine found)
     test("§3 output contains the colliding file path witness", () => {
         // The demo scenario: integration_suite_a and _b both write tests/fixtures/tmp.sqlite
         expect(result.combined).toMatch(/tests\/fixtures\/tmp\.sqlite/);
@@ -112,18 +112,6 @@ describe("scripts/install.sh — static validation", () => {
         expect(script).toMatch(/bun\.sh\/install/);
     });
 
-    // §9 — Z3 is a soft warning (not fatal)
-    test("§9 warns about missing z3 but does not exit", () => {
-        expect(script).toMatch(/command -v z3/);
-        // Must be a warning (echo) not a hard exit
-        const z3Block = script.slice(
-            script.indexOf("command -v z3"),
-            script.indexOf("command -v z3") + 200,
-        );
-        expect(z3Block).toMatch(/echo/);
-        // z3 check must NOT be followed immediately by `exit 1`
-        expect(z3Block).not.toMatch(/exit 1/);
-    });
 
     // §10 — Uses bun build --compile to produce a standalone binary
     test("§10 compiles with bun build --compile", () => {

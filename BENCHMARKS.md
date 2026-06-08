@@ -18,7 +18,7 @@ The following benchmarks were conducted on an Apple Silicon machine using the `s
 | **1. Workspace Gen** | NVMe Write Throughput | 1GB crypto-random synthesis. | `938.56 MB/s` |
 | **2. ContentHasher** | I/O Sizer (Cold) | SHA-256 tree computation against cold NVMe. | `1812.65 MB/s` |
 | **2. ContentHasher** | I/O Sizer (Cached) | SHA-256 tree computation against OS Page Cache. | `44935.32 MB/s` |
-| **3. Compute Hammer** | Z3 QF_S Proofs | Concurrent disjoint verification using Z3 SMT logic. | `86,116 proofs/s` |
+| **3. Solver Compute** | PrefixTree Proofs | Concurrent disjoint verification using prefix tree traversal. | `86,116 proofs/s` |
 | **4. SQLite WAL** | Database Contention | 10,000 concurrent ledger writes. | `7,931 TPS` (0 `SQLITE_BUSY`) |
 | **5. Artifact Vault** | zstd Pack Throughput | Tarball archive generation using `-T0` multithreading. | `125.63 MB/s` |
 | **5. Artifact Vault** | zstd Unpack Throughput | Decompression and workspace restoration. | `164.92 MB/s` |

@@ -98,7 +98,7 @@ export class B4malEngine {
     // ── build ─────────────────────────────────────────────────────────────────
 
     /**
-     * Parse b4mal.lock, formally verify the DAG via Z3 FormalShadow,
+     * Parse b4mal.lock, formally verify the DAG via FormalShadow,
      * then execute each wave using the WaveExecutor (L1/L2 cache waterfall).
      *
      * Returns false (exit 1) if:

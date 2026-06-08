@@ -136,7 +136,7 @@ describe("AppendixGenerator", () => {
 
     // ─── Markdown Integrity ───────────────────────────────────────────────
 
-    test("markdown output contains all three moat sections", () => {
+    test("markdown output contains all three sections", () => {
         const audit = new CoreAudit(db);
         const report = audit.generateReport();
 
@@ -146,10 +146,10 @@ describe("AppendixGenerator", () => {
             orgId: "acme",
         });
 
-        expect(appendix.markdown).toContain("# B4MAL TECHNICAL APPENDIX");
+        expect(appendix.markdown).toContain("# B4MAL PERFORMANCE REPORT");
         expect(appendix.markdown).toContain("Logic-Aware Hashing");
-        expect(appendix.markdown).toContain("Formal Verification");
-        expect(appendix.markdown).toContain("Core Token");
+        expect(appendix.markdown).toContain("State Isolation");
+        expect(appendix.markdown).toContain("Tool Integration");
     });
 
     test("markdown contains proper heading hierarchy", () => {

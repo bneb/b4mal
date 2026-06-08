@@ -1,7 +1,4 @@
-// B4mal v1.6.0 — The "Interactive Init" ("Mission Control")
-//
-// Bootstraps a local repository with B4mal state tracking,
-// Z3 checks, and language-specific shim discovery.
+// Bootstraps a local repository with B4mal state tracking
 
 import { join } from "path";
 import { existsSync, mkdirSync, writeFileSync, readdirSync, statSync } from "fs";
@@ -59,7 +56,7 @@ export class InitCommand {
      */
     static async execute(args: string[]): Promise<void> {
         console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-        console.log("  B4MAL MISSION CONTROL INIT");
+        console.log("  B4MAL INIT");
         console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
         const cwd = process.cwd();
@@ -83,6 +80,6 @@ export class InitCommand {
             console.log("\x1b[33mNO RECOGNIZED LANGUAGES\x1b[0m\n");
         }
 
-        console.log("  \x1b[32m[OK] Init complete. Stop paying the Cache Miss Overhead.\x1b[0m\n");
+        console.log("  \x1b[32m[OK] Init complete.\x1b[0m\n");
     }
 }

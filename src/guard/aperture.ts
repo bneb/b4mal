@@ -2,7 +2,7 @@
 //
 // Materializes a "Focal Point" for every task using atomic symlink
 // projection. A task's visibility is limited strictly to its
-// Z3-verified Resource Claims — nothing more, nothing less.
+// verified Resource Claims — nothing more, nothing less.
 //
 // The Aperture Lifecycle:
 //   1. openAperture() — Projects a bespoke symlink environment

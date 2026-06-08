@@ -2,8 +2,8 @@
  * B4mal v1.0 — Engine Orchestrator
  *
  * Wires DAG → Runner → Cache into a single execution pipeline.
- * JPL-grade: structured metadata on every cache write,
- * isolation metrics rendered via JPLReporter.
+ * Structured metadata on every cache write,
+ * isolation metrics rendered via TerminalReporter.
  */
 import type { Pipeline, PipelineResult, Task, TaskResult } from "./schema";
 import { buildDag, formatDagPlan } from "./dag";
@@ -13,7 +13,7 @@ import { Telemetry } from "./telemetry";
 import { generateLogicHash } from "./core/logic_hasher";
 import { TelemetryAggregator } from "./core/telemetry_aggregator";
 import {
-    JPLReporter,
+    TerminalReporter,
     reportPipelineStart,
     reportTaskStart,
     reportTaskEnd,
@@ -30,7 +30,7 @@ export interface EngineOptions {
     cacheDir?: string;
     silent?: boolean;
     /** Enable Verbose Dashboard (v1.0) */
-    jpl?: boolean;
+    verbose?: boolean;
     /** Enable TUI HUD (v1.5) */
     tui?: boolean;
 }
@@ -39,13 +39,13 @@ export class Engine {
     private cache: TaskCache | null;
     private telemetry: Telemetry;
     private options: EngineOptions;
-    private jplReporter: JPLReporter | null;
+    private terminalReporter: TerminalReporter | null;
     private tuiReporter: TuiReporter | null;
 
     constructor(options: EngineOptions = {}) {
         this.options = options;
         this.telemetry = new Telemetry();
-        this.jplReporter = options.jpl && !options.silent ? new JPLReporter() : null;
+        this.terminalReporter = options.verbose && !options.silent ? new TerminalReporter() : null;
         this.tuiReporter = null;
 
         if (options.noCache) {
@@ -72,8 +72,8 @@ export class Engine {
         // ── Dry Run ────────────────────────────────────────────────────────────
         if (this.options.dryRun) {
             if (!this.options.silent) {
-                if (this.jplReporter) {
-                    this.jplReporter.renderHUD(pipeline.tasks.length, pipeline.name);
+                if (this.terminalReporter) {
+                    this.terminalReporter.renderHUD(pipeline.tasks.length, pipeline.name);
                 } else {
                     reportPipelineStart(pipeline.name, pipeline.tasks.length);
                 }
@@ -90,8 +90,8 @@ export class Engine {
 
         // ── Execute ────────────────────────────────────────────────────────────
         if (!this.options.silent) {
-            if (this.jplReporter) {
-                this.jplReporter.renderHUD(pipeline.tasks.length, pipeline.name);
+            if (this.terminalReporter) {
+                this.terminalReporter.renderHUD(pipeline.tasks.length, pipeline.name);
             } else {
                 reportPipelineStart(pipeline.name, pipeline.tasks.length);
             }
@@ -198,19 +198,19 @@ export class Engine {
 
         // ── Render ─────────────────────────────────────────────────────────────
         if (!this.options.silent && !this.options.tui) {
-            if (this.jplReporter && this.cache) {
+            if (this.terminalReporter && this.cache) {
                 // Isolation metrics from the database
                 const tax = TelemetryAggregator.calculateTaxSaved(this.cache.db);
-                this.jplReporter.renderIsolationBar(tax);
+                this.terminalReporter.renderIsolationBar(tax);
 
                 if (tax.logicalHits > 0 || results.length > 3) {
                     const bottleneck = TelemetryAggregator.findBottleneck(this.cache.db);
-                    if (bottleneck.durationMs > 0) {
-                        this.jplReporter.renderBottleneck(bottleneck);
+                    if (bottleneck) {
+                        this.terminalReporter.renderBottleneck(bottleneck);
                     }
                 }
 
-                this.jplReporter.renderFlightSummary(pipelineResult);
+                this.terminalReporter.renderFlightSummary(pipelineResult);
             } else {
                 reportPipelineEnd(pipelineResult);
             }
@@ -227,8 +227,8 @@ export class Engine {
             if (!this.options.silent) {
                 if (this.tuiReporter) {
                     this.tuiReporter.renderTaskStart(task.id);
-                } else if (this.jplReporter) {
-                    this.jplReporter.renderTaskStart(task.id);
+                } else if (this.terminalReporter) {
+                    this.terminalReporter.renderTaskStart(task.id);
                 } else {
                     reportTaskStart(task.id);
                 }
@@ -244,8 +244,8 @@ export class Engine {
                     if (!this.options.silent) {
                         if (this.tuiReporter) {
                             this.tuiReporter.renderTaskEnd(cached);
-                        } else if (this.jplReporter) {
-                            this.jplReporter.renderTaskEnd(cached);
+                        } else if (this.terminalReporter) {
+                            this.terminalReporter.renderTaskEnd(cached);
                         } else {
                             reportTaskEnd(cached);
                         }
@@ -283,8 +283,8 @@ export class Engine {
             if (!this.options.silent) {
                 if (this.tuiReporter) {
                     this.tuiReporter.renderTaskEnd(result);
-                } else if (this.jplReporter) {
-                    this.jplReporter.renderTaskEnd(result);
+                } else if (this.terminalReporter) {
+                    this.terminalReporter.renderTaskEnd(result);
                 } else {
                     reportTaskEnd(result);
                 }

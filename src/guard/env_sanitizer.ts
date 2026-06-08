@@ -25,7 +25,7 @@ export class EnvSanitizer {
     /**
      * Construct a sanitized environment object for Bun.spawn().
      *
-     * @param claimedEnvs - Raw env keys from Z3-verified claims
+     * @param claimedEnvs - Raw env keys from verified claims
      *                      (e.g. ["RUST_LOG", "NODE_ENV"])
      * @param hostEnv     - The host's process.env
      * @returns A clean env object containing ONLY whitelisted +
@@ -44,7 +44,7 @@ export class EnvSanitizer {
             }
         }
 
-        // 2. Apply Z3-verified claims
+        // 2. Apply verified claims
         for (const key of claimedEnvs) {
             if (hostEnv[key] !== undefined) {
                 cleanEnv[key] = hostEnv[key]!;

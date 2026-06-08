@@ -24,7 +24,7 @@ describe("TimeSavingsCalculator - Precision Verification", () => {
     });
 });
 
-// ─── Zero-Tax Edge Case ──────────────────────────────────────────────────────
+// ─── Edge Case ──────────────────────────────────────────────────────────────
 
 describe("TimeSavingsCalculator - Zero Tax Edge Case", () => {
     test("0 tax events returns 0.00 hours", () => {
@@ -72,7 +72,7 @@ describe("ProposalTemplate - Markdown Integrity", () => {
         expect(report).toContain("| Efficiency Gain | **42.0%** |");
     });
 
-    test("zero-tax edge case explicitly praises peak efficiency", () => {
+    test("edge case explicitly praises peak efficiency", () => {
         const zeroSavings = TimeSavingsCalculator.calculate({
             taxEvents: 0,
             avgBuildMinutes: 8,

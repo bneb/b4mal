@@ -1,6 +1,6 @@
 // tests/soundness.test.ts — v4.0.0 Soundness Pivot (RED-to-GREEN)
 //
-// Content Hash Invalidation + Z3 QF_S Symbolic String Theory
+// Content Hash Invalidation + QF_S Symbolic String Theory
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { ContentHasher } from "../src/core/content_hasher";
@@ -101,7 +101,7 @@ describe("ContentHasher — Deterministic Directory Sort", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// § 2 — Z3 QF_S String Theory
+// § 2 — QF_S String Theory
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("FormalShadow — QF_S Symbolic Overlap", () => {
@@ -126,7 +126,7 @@ describe("FormalShadow — QF_S Symbolic Overlap", () => {
 
         expect(result.isolated).toBe(false);
         expect(result.solverResult).toBe("sat");
-        // Z3 must provide a counterexample (the witnessing path)
+        // The engine must provide a counterexample (the witnessing path)
         expect(result.counterexample).toBeDefined();
         expect(result.counterexample!.length).toBeGreaterThan(0);
     });

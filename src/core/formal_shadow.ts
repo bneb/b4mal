@@ -1,6 +1,6 @@
 /**
  * @file formal_shadow.ts
- * @description Implements Z3-based formal verification to prove absolute path disjointness between concurrent execution waves.
+ * @description Implements formal verification to prove absolute path disjointness between concurrent execution waves.
  */
 
 import {

@@ -1,4 +1,4 @@
-key: rwx-demo
+key: shadow-demo
 tasks:
   - key: a
     run: echo a > foo.txt

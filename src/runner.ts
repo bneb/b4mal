@@ -1,7 +1,7 @@
 /**
  * B4mal v0.5.0 — Task Runner
  *
- * Zero-tax process isolation via Bun.spawn.
+ * Process isolation via Bun.spawn.
  * Nanosecond-precision timing via Bun.nanoseconds().
  */
 import type { Task, TaskResult } from "./schema";

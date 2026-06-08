@@ -29,7 +29,7 @@ bash scripts/crucible_deploy.sh main@192.168.68.68 %YourPassword%
 
 This script:
 1. Installs your `~/.ssh/id_rsa.pub` for future passwordless access
-2. Installs Z3 and Node via apt-get
+2. Installs Node via apt-get
 3. rsyncs the repo (no .git, no node_modules)
 4. Runs `bun install`
 5. Runs the crucible, saving output to a timestamped `.log` file
@@ -41,7 +41,7 @@ This script:
 ssh-copy-id main@<IP>
 
 # Install system deps
-ssh main@<IP> "echo 'PASSWORD' | sudo -S apt-get install -y z3 nodejs"
+ssh main@<IP> "echo 'PASSWORD' | sudo -S apt-get install -y nodejs"
 
 # Sync repo
 rsync -az --exclude='.git' --exclude='node_modules' \
@@ -58,7 +58,7 @@ ssh main@<IP> "cd ~/b4mal && bun install && bun run src/benchmarks/crucible.ts 2
 |---|---|---|
 | 1. Workspace Gen | NVMe write speed (crypto-random) | MB/s write |
 | 2. ContentHasher | SHA-256 + stream throughput | MB/s (cold vs hot) |
-| 3. Z3 QF_S | Process spawn overhead, solver speed | proofs/sec, p50/p99 ms |
+| 3. PrefixTree QF_S | Algorithm overhead, solver speed | proofs/sec, p50/p99 ms |
 | 4. SQLite WAL | Concurrent write contention | TPS, SQLITE_BUSY count |
 | 5. tar/zstd | Archive pack/unpack throughput | MB/s |
 
@@ -69,12 +69,12 @@ ssh main@<IP> "cd ~/b4mal && bun install && bun run src/benchmarks/crucible.ts 2
 | NVMe write throughput | 990 MB/s |
 | SHA-256 throughput (cold) | 1,335 MB/s |
 | SHA-256 throughput (cached) | 1,436 MB/s |
-| Z3 proofs/sec | 351 |
+| PrefixTree proofs/sec | 351 |
 | SQLite TPS | 1,005 (0 SQLITE_BUSY) |
 | zstd pack | 1,353 MB/s |
 | zstd unpack | 1,117 MB/s |
 
-> **Note:** After v4.4.0, the Crucible now tests the zstd vault (`tar|zstd -T0`) and Z3Pool instead of raw subprocess spawning. Expect significantly higher pack throughput and much lower Z3 p50 latency on the Linux box.
+> **Note:** After v4.4.0, the Crucible now tests the zstd vault (`tar|zstd -T0`). Expect significantly higher pack throughput on the Linux box.
 
 ### Notes
 

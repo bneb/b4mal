@@ -12,7 +12,7 @@ export interface CacheMetadata {
     hitCount?: number;
     /** Version that created this entry */
     version?: string;
-    /** Zero-trust cryptographic signature of the content hash */
+    /** Cryptographic signature of the content hash */
     signature?: string;
 }
 

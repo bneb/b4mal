@@ -25,7 +25,7 @@ export class ProposalTemplate {
             day: "numeric",
         });
 
-        // ── ZERO-TAX EDGE CASE ──
+        // ── EDGE CASE ──
         if (audit.taxEvents === 0) {
             return `\
 # Optimization Report: ${repoName}
@@ -58,7 +58,7 @@ Every commit analyzed contained meaningful logic changes. There were zero wasted
 
 This report outlines the build time impact of integrating the B4mal Engine into the \`${repoName}\` development lifecycle.
 
-Based on an audit of the last **${audit.commitsScanned}** commits, your organization is currently experiencing **Cache Miss Overhead** — computational cycles spent rebuilding code where the underlying mathematical logic has not changed.
+Based on an audit of the last **${audit.commitsScanned}** commits, your organization is currently experiencing **Cache Miss Overhead** — computational cycles spent rebuilding code where the underlying logic has not changed.
 
 | Metric | Value |
 |:---|:---|

@@ -113,9 +113,9 @@ describe("AttestHandler - Silent Failure", () => {
     });
 });
 
-// ─── Z3 Linkage: FormalShadow Integration ────────────────────────────────────
+// ─── FormalShadow Integration ────────────────────────────────────
 
-describe("AttestHandler - Z3 Linkage", () => {
+describe("AttestHandler - FormalShadow Linkage", () => {
     test("converts parsed args to TaskResourceClaim", () => {
         const args = AttestHandler.parseArgs([
             "test_db_migration",
