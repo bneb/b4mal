@@ -3,7 +3,7 @@ import { Database } from "bun:sqlite";
 import { CoreAudit } from "../src/core/audit";
 import { AuditEngine } from "../src/core/audit_engine";
 import { stripForLanguage } from "../src/core/comment_stripper";
-import { RustNormalizer } from "../src/core/rust_normalizer";
+
 import { RustAuditor } from "../src/core/rust_auditor";
 import { B4malEngine } from "../src/core/engine";
 import { SQLiteLedger } from "../src/core/sqlite_ledger";
@@ -94,13 +94,7 @@ describe("Catchup Coverage", () => {
         stripForLanguage(`foo /* unfinished`, "cpp");
     });
 
-    test("RustNormalizer missing binary", () => {
-        const origPath = process.env.RUST_NORMALIZER_BIN;
-        process.env.RUST_NORMALIZER_BIN = "/does/not/exist/bin";
-        // Since it falls back, we just ensure it doesn't throw and does strip comments
-        expect(RustNormalizer.normalize("fn main() { // comment\n}")).toContain("fn main()");
-        process.env.RUST_NORMALIZER_BIN = origPath;
-    });
+    // RustNormalizer has been removed
 
     test("RustAuditor print output", async () => {
         try {

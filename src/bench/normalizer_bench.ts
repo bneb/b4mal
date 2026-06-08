@@ -7,7 +7,6 @@
 // Exposes structured BenchResult for programmatic access
 // and formatted ANSI output for CLI.
 
-import { RustNormalizer } from "../core/rust_normalizer";
 import { stripForLanguage, type LanguageId } from "../core/comment_stripper";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -108,8 +107,8 @@ export class NormalizerBench {
     }
 
     private static logicNormalize(source: string, language: string): string {
-        if (language === "rust") {
-            return RustNormalizer.normalize(source);
+        if (language === "rust" || language === "go" || language === "python" || language === "c" || language === "cpp") {
+            return stripForLanguage(source, language as LanguageId);
         }
 
         if (language === "typescript" || language === "javascript") {

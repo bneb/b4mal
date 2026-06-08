@@ -8,7 +8,7 @@
 
 import { describe, test, expect } from "bun:test";
 import { NormalizerBench, type BenchResult } from "../src/bench/normalizer_bench";
-import { RustNormalizer } from "../src/core/rust_normalizer";
+import { stripForLanguage } from "../src/core/comment_stripper";
 import { generateLogicHash } from "../src/core/logic_hasher";
 
 // ─── Helper: Generate synthetic Rust source ──────────────────────────────────
@@ -27,17 +27,17 @@ describe("Normalizer linearity", () => {
         const large = generateRustSource(10000);
 
         // Warmup both
-        RustNormalizer.normalize(small);
-        RustNormalizer.normalize(large);
+        stripForLanguage(small, "rust");
+        stripForLanguage(large, "rust");
 
         // Measure small
         const t0 = performance.now();
-        for (let i = 0; i < 10; i++) RustNormalizer.normalize(small);
+        for (let i = 0; i < 10; i++) stripForLanguage(small, "rust");
         const smallTime = (performance.now() - t0) / 10;
 
         // Measure large
         const t1 = performance.now();
-        for (let i = 0; i < 10; i++) RustNormalizer.normalize(large);
+        for (let i = 0; i < 10; i++) stripForLanguage(large, "rust");
         const largeTime = (performance.now() - t1) / 10;
 
         // 10x input should be ≤15x time (allowing for constant factors)
@@ -50,12 +50,12 @@ describe("Normalizer linearity", () => {
         const source = generateRustSource(100);
 
         // Warmup
-        for (let i = 0; i < 50; i++) RustNormalizer.normalize(source);
+        for (let i = 0; i < 50; i++) stripForLanguage(source, "rust");
 
         const start = performance.now();
+        for (let i = 0; i < 50; i++) stripForLanguage(source, "rust");
         const avgMs = (performance.now() - start) / 50;
 
-        // Since it's a spawned binary, allow up to 20ms
         expect(avgMs).toBeLessThan(20);
     });
 });
@@ -71,7 +71,7 @@ describe("Memory stability", () => {
         const before = process.memoryUsage().heapUsed;
 
         for (let i = 0; i < 500; i++) {
-            RustNormalizer.normalize(source);
+            stripForLanguage(source, "rust");
         }
 
         if (typeof Bun.gc === "function") Bun.gc(true);
@@ -102,7 +102,7 @@ fn add(a: i32, b: i32) -> i32 {
 `;
         // Run normalizer at speed
         for (let i = 0; i < 50; i++) {
-            RustNormalizer.normalize(withComments);
+            stripForLanguage(withComments, "rust");
         }
 
         // Now verify the hash is still correct
@@ -117,7 +117,7 @@ fn add(a: i32, b: i32) -> i32 {
 
         let lastResult = "";
         for (let i = 0; i < 50; i++) {
-            lastResult = RustNormalizer.normalize(source);
+            lastResult = stripForLanguage(source, "rust");
         }
 
         expect(lastResult).toContain(`println!("Value: {}", 42)`);

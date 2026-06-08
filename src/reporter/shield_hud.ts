@@ -62,7 +62,7 @@ export class ShieldHUD {
         attestation: IsolationAttestation,
         constraints: ProofNode[]
     ): ShieldRenderResult {
-        const isVerified = attestation.solver.result === "UNSAT";
+        const isVerified = attestation.verifier.result === "VERIFIED";
         const status = isVerified ? "VERIFIED" : "COLLISION";
         const unverifiedCount = constraints.filter(c => !c.verified).length;
         const lines: string[] = [];
@@ -75,7 +75,7 @@ export class ShieldHUD {
         }
 
         // Proof type
-        const proofLabel = isVerified ? "ISOLATION PROOF [UNSAT]" : "CONFLICT ANALYSIS [SAT]";
+        const proofLabel = isVerified ? "ISOLATION PROOF [VERIFIED]" : "CONFLICT ANALYSIS [COLLISION]";
         lines.push(`${CYAN} ├─┬─ ${proofLabel}${R}`);
 
         // Constraint tree
@@ -92,8 +92,8 @@ export class ShieldHUD {
         }
 
         // Solver metadata
-        lines.push(`${CYAN} └── ${D}Solver: ${attestation.solver.engine} v${attestation.solver.version}${R}`);
-        lines.push(`${CYAN}     ${YELLOW}${attestation.solver.duration_ms}ms${R} ${D}verification time${R}`);
+        lines.push(`${CYAN} └── ${D}Verifier: ${attestation.verifier.engine} v${attestation.verifier.version}${R}`);
+        lines.push(`${CYAN}     ${YELLOW}${attestation.verifier.duration_ms}ms${R} ${D}verification time${R}`);
 
         const raw = lines.map(l => l).join("\n");
         return { lines, raw, status, unverifiedCount };

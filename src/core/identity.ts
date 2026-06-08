@@ -4,7 +4,8 @@
  */
 
 import { ConfigResolver } from "./config_resolver";
-import { RustNormalizer } from "./rust_normalizer";
+import { stripForLanguage } from "./comment_stripper";
+
 
 export interface TaskIdentityResult {
     logicHash: string;
@@ -61,7 +62,7 @@ export class TaskIdentity {
         // ── Layer 1: Logic Hash (AST-normalized, cross-platform) ─────
         let normalizedCode: string;
         if (filePath.endsWith(".rs")) {
-            normalizedCode = RustNormalizer.normalize(rawCode).replace(/\s+/g, " ").trim();
+            normalizedCode = stripForLanguage(rawCode, "rust").replace(/\s+/g, " ").trim();
         } else {
             // TS/JS: use Bun transpiler for type/comment stripping
             try {

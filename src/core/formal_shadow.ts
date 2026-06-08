@@ -22,8 +22,8 @@ export interface TaskResourceClaim {
 export interface PairResult {
     isolated: boolean;
     conflictingResources: string[];
-    solverResult: "sat" | "unsat";
-    /** When SAT, the witnessing path (the counterexample) */
+    hasConflict: boolean;
+    /** When there is a conflict, the witnessing path (the counterexample) */
     counterexample?: string;
 }
 
@@ -56,11 +56,11 @@ export class FormalShadow {
 
     static shutdownPool(): void {}
 
-    static async getSolverVersion(): Promise<string> {
+    static async getVerifierVersion(): Promise<string> {
         return "1.0.0";
     }
 
-    static getSolverEngine(): string {
+    static getVerifierEngine(): string {
         return "PREFIX_TREE";
     }
 
@@ -78,13 +78,13 @@ export class FormalShadow {
     ): Promise<PairResult> {
         const waveResult = await this.verifyWave([taskA, taskB]);
         if (waveResult.verified) {
-            return { isolated: true, conflictingResources: [], solverResult: "unsat" };
+            return { isolated: true, conflictingResources: [], hasConflict: false };
         } else {
             const conflict = waveResult.conflicts[0];
             return {
                 isolated: false,
                 conflictingResources: conflict.resources,
-                solverResult: "sat",
+                hasConflict: true,
                 counterexample: conflict.resources[0],
             };
         }
@@ -275,11 +275,11 @@ export class FormalShadow {
 
         const attestation = IsolationAttestationSchema.parse({
             verified_at: new Date().toISOString(),
-            solver: {
+            verifier: {
                 engine: "PREFIX_TREE",
                 version: "1.0.0",
                 duration_ms: durationMs,
-                result: waveResult.verified ? "UNSAT" : "SAT",
+                result: waveResult.verified ? "VERIFIED" : "COLLISION",
             },
             proof: {
                 isolation_level: waveResult.verified ? "FORMAL" : "NONE",

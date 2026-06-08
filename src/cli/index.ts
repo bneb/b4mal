@@ -102,6 +102,13 @@ async function main() {
                 break;
             }
 
+            // ── trace ────────────────────────────────────────────────────────
+            case "trace": {
+                const { TraceCommand } = await import("./trace");
+                await TraceCommand.execute(positionals.slice(3));
+                break;
+            }
+
             // ── init ──────────────────────────────────────────────────────────
             case "init": {
                 banner("Initializing Core Discovery…");
@@ -307,6 +314,7 @@ function printUsage(): void {
     b4mal analyze        Generate visual observability dashboard
     b4mal migrate <yml>  Migrate RWX Mint YAML to b4mal
     b4mal clean          Purge artifact vault + ledger
+    b4mal trace "cmd"    Synthesize a DAG automatically via eBPF
     b4mal plugin         Manage and execute decentralized WASM plugins
 
   ${c.bold}Flags:${c.reset}
@@ -324,3 +332,5 @@ function printUsage(): void {
 // ─── Entry ───────────────────────────────────────────────────────────────────
 
 main();
+
+console.log('hi');

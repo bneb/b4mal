@@ -3,7 +3,7 @@
  * @description Computes structural hashes of task logic to enable L1/L2 cache keying.
  */
 
-import { RustNormalizer } from "./rust_normalizer";
+import { detectLanguage, stripForLanguage, SUPPORTED_EXTENSIONS } from "./comment_stripper";
 
 const transpiler = new Bun.Transpiler({
     loader: "ts",
@@ -50,15 +50,15 @@ export async function generateLogicHashFromFile(filePath: string): Promise<strin
 
 export async function generateLogicHash(code: string, filePath?: string): Promise<string> {
     try {
-        let normalized: string;
-
-        if (filePath && filePath.endsWith(".rs")) {
-            const normalized = RustNormalizer.normalize(code);
-            const hasher = new Bun.CryptoHasher("sha256");
-            hasher.update(normalized);
-            return hasher.digest("hex");
-        } else {
-            const transpiled = transpiler.transformSync(code);
+        const lang = filePath ? detectLanguage(filePath) : "typescript";
+        
+        if (lang === "typescript" || lang === "javascript") {
+            let transpiled: string;
+            try {
+                transpiled = transpiler.transformSync(code);
+            } catch {
+                transpiled = stripForLanguage(code, lang);
+            }
             
             const buf = Buffer.from(transpiled);
             const hasher = new Bun.CryptoHasher("sha256");
@@ -83,7 +83,14 @@ export async function generateLogicHash(code: string, filePath?: string): Promis
                 hasher.update(buf.subarray(lastStart));
             }
             return hasher.digest("hex");
+        } else if (lang) {
+            const normalized = stripForLanguage(code, lang);
+            const hasher = new Bun.CryptoHasher("sha256");
+            hasher.update(normalized);
+            return hasher.digest("hex");
         }
+        
+        throw new Error("Not logic hashable");
     } catch {
         // Fallback for non-TS/JS content (JSON, YAML, Markdown, etc.)
         const hasher = new Bun.CryptoHasher("sha256");
@@ -97,6 +104,6 @@ export async function generateLogicHash(code: string, filePath?: string): Promis
  * Non-code files always use content hashing.
  */
 export function isLogicHashable(path: string): boolean {
-    const ext = path.split(".").pop()?.toLowerCase();
-    return ext === "ts" || ext === "tsx" || ext === "js" || ext === "jsx" || ext === "mts" || ext === "mjs" || ext === "rs";
+    const ext = "." + (path.split(".").pop()?.toLowerCase() || "");
+    return SUPPORTED_EXTENSIONS.includes(ext);
 }

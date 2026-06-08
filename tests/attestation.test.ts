@@ -18,11 +18,11 @@ describe("IsolationAttestationSchema", () => {
     test("valid attestation parses correctly", () => {
         const raw = {
             verified_at: new Date().toISOString(),
-            solver: {
+            verifier: {
                 engine: "PREFIX_TREE",
                 version: "4.16.0",
                 duration_ms: 1.5,
-                result: "UNSAT",
+                result: "VERIFIED",
             },
             proof: {
                 isolation_level: "FORMAL",
@@ -34,14 +34,14 @@ describe("IsolationAttestationSchema", () => {
         expect(result.success).toBe(true);
     });
 
-    test("missing solver.duration_ms throws Zod error", () => {
+    test("missing verifier.duration_ms throws Zod error", () => {
         const raw = {
             verified_at: new Date().toISOString(),
-            solver: {
+            verifier: {
                 engine: "PREFIX_TREE",
                 version: "4.16.0",
                 // duration_ms missing!
-                result: "UNSAT",
+                result: "VERIFIED",
             },
             proof: {
                 isolation_level: "FORMAL",
@@ -53,10 +53,10 @@ describe("IsolationAttestationSchema", () => {
         expect(result.success).toBe(false);
     });
 
-    test("invalid solver.result enum throws Zod error", () => {
+    test("invalid verifier.result enum throws Zod error", () => {
         const raw = {
             verified_at: new Date().toISOString(),
-            solver: {
+            verifier: {
                 engine: "PREFIX_TREE",
                 version: "4.16.0",
                 duration_ms: 1.0,
@@ -75,7 +75,7 @@ describe("IsolationAttestationSchema", () => {
     test("signature field is optional", () => {
         const raw = {
             verified_at: new Date().toISOString(),
-            solver: { engine: "PREFIX_TREE", version: "4.16.0", duration_ms: 2.0, result: "UNSAT" },
+            verifier: { engine: "PREFIX_TREE", version: "4.16.0", duration_ms: 2.0, result: "VERIFIED" },
             proof: { isolation_level: "FORMAL", logic_hash: "a", resource_set_hash: "b" },
         };
         const withSig = { ...raw, signature: "mTLS_placeholder_sig" };
@@ -96,15 +96,15 @@ describe("FormalShadow.attest", () => {
 
         const attestation = await FormalShadow.attest(claims, "logic_hash_abc");
 
-        expect(attestation.solver.engine).toBe("PREFIX_TREE");
-        expect(attestation.solver.result).toBe("UNSAT");
+        expect(attestation.verifier.engine).toBe("PREFIX_TREE");
+        expect(attestation.verifier.result).toBe("VERIFIED");
         expect(attestation.proof.isolation_level).toBe("FORMAL");
         expect(attestation.proof.logic_hash).toBe("logic_hash_abc");
         expect(attestation.proof.resource_set_hash.length).toBeGreaterThan(0);
-        expect(attestation.solver.duration_ms).toBeGreaterThanOrEqual(0);
+        expect(attestation.verifier.duration_ms).toBeGreaterThanOrEqual(0);
     });
 
-    test("SAT result for colliding tasks", async () => {
+    test("COLLISION result for colliding tasks", async () => {
         const claims: TaskResourceClaim[] = [
             { id: "a", reads: [], writes: ["shared.log"], envReads: [], envWrites: [] },
             { id: "b", reads: [], writes: ["shared.log"], envReads: [], envWrites: [] },
@@ -112,7 +112,7 @@ describe("FormalShadow.attest", () => {
 
         const attestation = await FormalShadow.attest(claims, "hash_x");
 
-        expect(attestation.solver.result).toBe("SAT");
+        expect(attestation.verifier.result).toBe("COLLISION");
         expect(attestation.proof.isolation_level).toBe("NONE");
     });
 
@@ -160,12 +160,12 @@ describe("Attestation Persistence", () => {
 
         // Read back
         const row = db.query(
-            `SELECT json_extract(metadata, '$.attestation.solver.result') as result,
+            `SELECT json_extract(metadata, '$.attestation.verifier.result') as result,
                     json_extract(metadata, '$.attestation.proof.isolation_level') as level
              FROM task_cache_v2 WHERE id = 'build'`
         ).get() as { result: string; level: string };
 
-        expect(row.result).toBe("UNSAT");
+        expect(row.result).toBe("VERIFIED");
         expect(row.level).toBe("FORMAL");
 
         db.close();
@@ -185,10 +185,10 @@ describe("Attestation Persistence", () => {
 
         // 3 tasks: 2 FORMAL, 1 NONE
         const formalMeta = JSON.stringify({
-            attestation: { solver: { result: "UNSAT" }, proof: { isolation_level: "FORMAL" } },
+            attestation: { verifier: { result: "VERIFIED" }, proof: { isolation_level: "FORMAL" } },
         });
         const noneMeta = JSON.stringify({
-            attestation: { solver: { result: "SAT" }, proof: { isolation_level: "NONE" } },
+            attestation: { verifier: { result: "COLLISION" }, proof: { isolation_level: "NONE" } },
         });
 
         db.query(`INSERT INTO task_cache_v2 (id, content_hash, exit_code, duration_ms, metadata) VALUES ('a', 'c1', 0, 50, ?)`).run(formalMeta);

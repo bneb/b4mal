@@ -11,12 +11,12 @@ export const IsolationAttestationSchema = z.object({
     /** ISO 8601 timestamp of verification */
     verified_at: z.string().datetime(),
 
-    /** Solver metadata */
-    solver: z.object({
-        engine: z.literal("PREFIX_TREE"),
+    /** Verifier metadata */
+    verifier: z.object({
+        engine: z.string(),
         version: z.string(),
         duration_ms: z.number(),
-        result: z.enum(["SAT", "UNSAT", "UNKNOWN"]),
+        result: z.enum(["VERIFIED", "COLLISION"]),
     }),
 
     /** Proof payload */

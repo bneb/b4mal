@@ -105,7 +105,7 @@ describe("ContentHasher — Deterministic Directory Sort", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("FormalShadow — QF_S Symbolic Overlap", () => {
-    test("prefix overlap: fs:src/ vs fs:src/utils/ returns SAT (conflict)", async () => {
+    test("prefix overlap: fs:src/ vs fs:src/utils/ returns conflict", async () => {
         const taskA: TaskResourceClaim = {
             id: "compiler",
             reads: [],
@@ -125,13 +125,13 @@ describe("FormalShadow — QF_S Symbolic Overlap", () => {
         const result = await FormalShadow.verifyPairIsolation(taskA, taskB);
 
         expect(result.isolated).toBe(false);
-        expect(result.solverResult).toBe("sat");
+        expect(result.hasConflict).toBe(true);
         // The engine must provide a counterexample (the witnessing path)
         expect(result.counterexample).toBeDefined();
         expect(result.counterexample!.length).toBeGreaterThan(0);
     });
 
-    test("disjoint paths: fs:src/ vs fs:tests/ returns UNSAT (provably safe)", async () => {
+    test("disjoint paths: fs:src/ vs fs:tests/ returns provably safe", async () => {
         const taskA: TaskResourceClaim = {
             id: "builder",
             reads: ["src/"],
@@ -151,11 +151,11 @@ describe("FormalShadow — QF_S Symbolic Overlap", () => {
         const result = await FormalShadow.verifyPairIsolation(taskA, taskB);
 
         expect(result.isolated).toBe(true);
-        expect(result.solverResult).toBe("unsat");
+        expect(result.hasConflict).toBe(false);
         expect(result.counterexample).toBeUndefined();
     });
 
-    test("exact file in prefix: fs:src/ write vs fs:src/main.ts read returns SAT", async () => {
+    test("exact file in prefix: fs:src/ write vs fs:src/main.ts read returns conflict", async () => {
         const taskA: TaskResourceClaim = {
             id: "bundler",
             reads: [],
@@ -175,7 +175,7 @@ describe("FormalShadow — QF_S Symbolic Overlap", () => {
         const result = await FormalShadow.verifyPairIsolation(taskA, taskB);
 
         expect(result.isolated).toBe(false);
-        expect(result.solverResult).toBe("sat");
+        expect(result.hasConflict).toBe(true);
     });
 
     test("read-read on overlapping prefixes is NOT a conflict", async () => {
@@ -198,10 +198,10 @@ describe("FormalShadow — QF_S Symbolic Overlap", () => {
         const result = await FormalShadow.verifyPairIsolation(taskA, taskB);
 
         expect(result.isolated).toBe(true);
-        expect(result.solverResult).toBe("unsat");
+        expect(result.hasConflict).toBe(false);
     });
 
-    test("env write vs env read produces SAT", async () => {
+    test("env write vs env read produces conflict", async () => {
         const taskA: TaskResourceClaim = {
             id: "migrator",
             reads: [],
@@ -221,12 +221,12 @@ describe("FormalShadow — QF_S Symbolic Overlap", () => {
         const result = await FormalShadow.verifyPairIsolation(taskA, taskB);
 
         expect(result.isolated).toBe(false);
-        expect(result.solverResult).toBe("sat");
+        expect(result.hasConflict).toBe(true);
     });
 
-    test("solver engine is 'PREFIX_TREE' and version is real", async () => {
-        const version = await FormalShadow.getSolverVersion();
+    test("verifier engine is 'PREFIX_TREE' and version is real", async () => {
+        const version = await FormalShadow.getVerifierVersion();
         expect(version).toBe("1.0.0");
-        expect(FormalShadow.getSolverEngine()).toBe("PREFIX_TREE");
+        expect(FormalShadow.getVerifierEngine()).toBe("PREFIX_TREE");
     });
 });

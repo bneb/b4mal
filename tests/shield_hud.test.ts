@@ -18,12 +18,12 @@ import type { IsolationAttestation } from "../src/core/attestation_schema";
 function makeAttestation(overrides: Partial<IsolationAttestation> = {}): IsolationAttestation {
     return {
         verified_at: new Date().toISOString(),
-        solver: {
+        verifier: {
             engine: "PREFIX_TREE",
             version: "1.0.0",
             duration_ms: 1.2,
-            result: "UNSAT",
-            ...overrides.solver,
+            result: "VERIFIED",
+            ...overrides.verifier,
         },
         proof: {
             isolation_level: "FORMAL",
@@ -34,9 +34,9 @@ function makeAttestation(overrides: Partial<IsolationAttestation> = {}): Isolati
     };
 }
 
-function makeSatAttestation(): IsolationAttestation {
+function makeCollisionAttestation(): IsolationAttestation {
     return makeAttestation({
-        solver: { engine: "PREFIX_TREE", version: "1.0.0", duration_ms: 0.8, result: "SAT" },
+        verifier: { engine: "PREFIX_TREE", version: "1.0.0", duration_ms: 0.8, result: "COLLISION" },
         proof: { isolation_level: "NONE", logic_hash: "abc123", resource_set_hash: "def456" },
     });
 }
@@ -73,8 +73,8 @@ describe("ShieldHUD", () => {
         expect(result.raw).toContain("└");
     });
 
-    test("includes solver duration in output", () => {
-        const att = makeAttestation({ solver: { engine: "PREFIX_TREE", version: "1.0.0", duration_ms: 2.5, result: "UNSAT" } });
+    test("includes verifier duration in output", () => {
+        const att = makeAttestation({ verifier: { engine: "PREFIX_TREE", version: "1.0.0", duration_ms: 2.5, result: "VERIFIED" } });
         const result = ShieldHUD.renderProof("lint", att, []);
 
         expect(result.raw).toContain("2.5");
@@ -82,12 +82,12 @@ describe("ShieldHUD", () => {
 
     // ─── Failure State ────────────────────────────────────────────────────
 
-    test("renders collision warning for SAT result", () => {
+    test("renders collision warning for COLLISION result", () => {
         const constraints: ProofNode[] = [
             { id: "shared/config.json", type: "file", verified: false },
         ];
 
-        const result = ShieldHUD.renderProof("deploy", makeSatAttestation(), constraints);
+        const result = ShieldHUD.renderProof("deploy", makeCollisionAttestation(), constraints);
 
         expect(result.status).toBe("COLLISION");
         expect(result.raw).toContain("shared/config.json");
@@ -100,7 +100,7 @@ describe("ShieldHUD", () => {
             { id: "env:API_KEY", type: "env", verified: false },
         ];
 
-        const result = ShieldHUD.renderProof("api", makeSatAttestation(), constraints);
+        const result = ShieldHUD.renderProof("api", makeCollisionAttestation(), constraints);
 
         expect(result.status).toBe("COLLISION");
         expect(result.unverifiedCount).toBe(2);
@@ -139,7 +139,7 @@ describe("ShieldHUD", () => {
             },
             {
                 taskId: "unsafe",
-                attestation: makeSatAttestation(),
+                attestation: makeCollisionAttestation(),
                 constraints: [{ id: "shared.ts", type: "file" as const, verified: false }],
             },
         ];

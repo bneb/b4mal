@@ -3,7 +3,7 @@
  * @description Parses Rust macros and dependencies to determine strict execution boundaries for Cargo projects.
  */
 
-import { RustNormalizer } from "./rust_normalizer";
+import { stripForLanguage } from "./comment_stripper";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -71,9 +71,9 @@ export class RustAuditor {
                 // Skip if content is identical (no actual change)
                 if (before === after) continue;
 
-                // Normalize with RustNormalizer
-                const normBefore = RustNormalizer.normalize(before);
-                const normAfter = RustNormalizer.normalize(after);
+                // Normalize with comment_stripper
+                const normBefore = stripForLanguage(before, "rust");
+                const normAfter = stripForLanguage(after, "rust");
 
                 if (normBefore === normAfter) {
                     // TAX EVENT: Content changed but logic is identical

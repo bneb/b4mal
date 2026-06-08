@@ -34,6 +34,14 @@ const EXT_TO_LANG: Record<string, string> = {
     ".jsx": "javascript",
     ".mjs": "javascript",
     ".rs": "rust",
+    ".py": "python",
+    ".c": "c",
+    ".h": "c",
+    ".cpp": "cpp",
+    ".cc": "cpp",
+    ".cxx": "cpp",
+    ".hpp": "cpp",
+    ".go": "go",
 };
 
 const SOURCE_EXTENSIONS = new Set(Object.keys(EXT_TO_LANG));
@@ -143,7 +151,7 @@ export class ImportTracer {
             if (!real || !real.startsWith(root)) continue;
 
             if (entry.isDirectory()) {
-                if (["node_modules", ".git", "dist", "target", ".b4mal"].includes(entry.name)) continue;
+                if (["node_modules", ".git", "dist", "target", ".b4mal", "venv", ".venv"].includes(entry.name)) continue;
                 results.push(...await this.walkDirectory(fullPath, root));
             } else if (entry.isFile() && SOURCE_EXTENSIONS.has(path.extname(entry.name))) {
                 results.push(fullPath);
@@ -161,25 +169,33 @@ export class ImportTracer {
         root: string,
         knownNodes: Set<string>,
     ): string | null {
-        // Only resolve relative imports
-        if (!importPath.startsWith(".")) return null;
-
+        // Try to resolve relative to the requesting file's directory first
         const fromDir = path.dirname(fromFile);
-        const resolvedAbs = path.resolve(fromDir, importPath);
-        
-        // RED TEAM MITIGATION: Prevent import traversal out of workspace
-        if (!resolvedAbs.startsWith(root)) return null;
+        let candidates = [
+            path.resolve(fromDir, importPath),
+            // Also try resolving relative to the project root (e.g. for Python/Go)
+            path.resolve(root, importPath)
+        ];
 
-        const resolved = path.relative(root, resolvedAbs);
+        for (const resolvedAbs of candidates) {
+            // RED TEAM MITIGATION: Prevent import traversal out of workspace
+            if (!resolvedAbs.startsWith(root)) continue;
 
-        if (knownNodes.has(resolved)) return resolved;
+            const resolved = path.relative(root, resolvedAbs);
 
-        for (const ext of SOURCE_EXTENSIONS) {
-            const withExt = resolved + ext;
-            if (knownNodes.has(withExt)) return withExt;
+            if (knownNodes.has(resolved)) return resolved;
 
-            const indexFile = path.join(resolved, "index" + ext);
-            if (knownNodes.has(indexFile)) return indexFile;
+            for (const ext of SOURCE_EXTENSIONS) {
+                const withExt = resolved + ext;
+                if (knownNodes.has(withExt)) return withExt;
+
+                const indexFile = path.join(resolved, "index" + ext);
+                if (knownNodes.has(indexFile)) return indexFile;
+                
+                // Python package init
+                const initFile = path.join(resolved, "__init__" + ext);
+                if (knownNodes.has(initFile)) return initFile;
+            }
         }
 
         return null;

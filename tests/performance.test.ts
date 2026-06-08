@@ -31,7 +31,7 @@ describe("FormalShadow — Integrity", () => {
 
         const result = await FormalShadow.verifyPairIsolation(taskA, taskB);
 
-        expect(result.solverResult).toBe("sat");
+        expect(result.hasConflict).toBe(true);
         expect(result.isolated).toBe(false);
     });
 });

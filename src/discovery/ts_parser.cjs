@@ -33,12 +33,16 @@ async function getLanguage(lang) {
     return languages[lang];
 }
 
-async function parseFile(file, content, lang) {
-    const parser = new Parser();
-    const language = await getLanguage(lang);
-    parser.setLanguage(language);
+let sharedParser = null;
 
-    const tree = parser.parse(content);
+async function parseFile(file, content, lang) {
+    if (!sharedParser) {
+        sharedParser = new Parser();
+    }
+    const language = await getLanguage(lang);
+    sharedParser.setLanguage(language);
+
+    const tree = sharedParser.parse(content);
     const imports = [];
     const root = tree.rootNode;
 
@@ -46,9 +50,15 @@ async function parseFile(file, content, lang) {
         walkTS(root, imports);
     } else if (lang === "rust") {
         walkRust(root, imports);
+    } else if (lang === "python") {
+        walkPython(root, imports);
+    } else if (lang === "c" || lang === "cpp") {
+        walkC(root, imports);
+    } else if (lang === "go") {
+        walkGo(root, imports);
     }
 
-    parser.delete();
+    tree.delete();
     return { file, imports };
 }
 
@@ -115,8 +125,60 @@ function walkRust(node, imports) {
     }
 }
 
+function walkPython(node, imports) {
+    if (node.type === "import_statement") {
+        const nameNode = node.namedChild(0); // dotted_name
+        if (nameNode) {
+            const path = nameNode.text.replace(/\./g, "/");
+            imports.push({ path, dynamic: false });
+        }
+    } else if (node.type === "import_from_statement") {
+        const moduleNode = node.childForFieldName("module_name");
+        if (moduleNode) {
+            // handle relative dots (e.g. from ..foo import bar)
+            let raw = moduleNode.text;
+            // Tree-sitter might include leading dots, let's clean and translate
+            let pathStr = raw.replace(/\./g, "/");
+            if (raw.startsWith(".")) {
+                pathStr = "./" + pathStr.replace(/^\/+/, "");
+            }
+            imports.push({ path: pathStr, dynamic: false });
+        }
+    }
+
+    for (let i = 0; i < node.childCount; i++) {
+        walkPython(node.child(i), imports);
+    }
+}
+
+function walkC(node, imports) {
+    if (node.type === "preproc_include") {
+        const pathNode = node.childForFieldName("path");
+        if (pathNode) {
+            imports.push({ path: stripQuotes(pathNode.text), dynamic: false });
+        }
+    }
+
+    for (let i = 0; i < node.childCount; i++) {
+        walkC(node.child(i), imports);
+    }
+}
+
+function walkGo(node, imports) {
+    if (node.type === "import_spec") {
+        const pathNode = node.childForFieldName("path");
+        if (pathNode) {
+            imports.push({ path: stripQuotes(pathNode.text), dynamic: false });
+        }
+    }
+
+    for (let i = 0; i < node.childCount; i++) {
+        walkGo(node.child(i), imports);
+    }
+}
+
 function stripQuotes(s) {
-    return s.replace(/^['"`]|['"`]$/g, "");
+    return s.replace(/^['"<`]|['">`]$/g, "");
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────
