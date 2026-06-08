@@ -20,7 +20,7 @@
     "schemas": {
         "task": "TaskSchema (Zod): { id, cmd, dependencies, env }",
         "pipeline": "PipelineSchema (Zod): { tasks: Task[] }",
-        "attestation": "IsolationAttestationSchema: { solver: { engine, version, duration_ms, result }, proof: { isolation_level, logic_hash, resource_set_hash } }"
+        "attestation": "IsolationAttestationSchema: { verifier: { engine, version, duration_ms, result }, proof: { isolation_level, logic_hash, resource_set_hash } }"
     },
     "mcp": {
         "tools": [
@@ -55,13 +55,13 @@
         "equivalence": "disjoint paths",
         "isolation_condition": "(W₁ ∩ (R₂ ∪ W₂)) = ∅ ∧ (W₂ ∩ (R₁ ∪ W₁)) = ∅",
         "result_states": [
-            "UNSAT (Isolated)",
-            "SAT (Collision)"
+            "VERIFIED (Isolated)",
+            "COLLISION (Collision)"
         ],
         "attestation_includes": [
             "logic_hash",
             "resource_set_hash",
-            "solver_metadata"
+            "verifier_metadata"
         ]
     },
     "ast_hashing": {

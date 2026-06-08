@@ -63,7 +63,7 @@ The `trace` command intercepts `execve`, `openat`, and `clone` system calls via 
 
 - [Core Engine](./src/core/README.md) - Deep dive into caching, validation, and formal verification.
 - [Orchestrator](./src/orchestrator/README.md) - Dynamic scheduling, DAG planning, and subprocess isolation.
-- [Architecture](./ARCHITECTURE.md) - Details on the internal engine mechanics and the DAG solver.
+- [Architecture](./ARCHITECTURE.md) - Details on the internal engine mechanics and the DAG collision engine.
 - [Benchmarks](./BENCHMARKS.md) - Apple M4 and Linux NVMe bare-metal performance metrics.
 
 ## Contributing

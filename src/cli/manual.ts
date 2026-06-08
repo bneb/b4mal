@@ -27,7 +27,7 @@ concurrent task execution. Each zone represents a directory namespace.
   [!!]   Contention Detected. Multiple tasks are writing to the same zone
          and isolation has not yet been proven. Investigate immediately.
 
-  []  Formally Verified. The solver has produced a disjoint proof
+  []  Formally Verified. The verifier has produced a disjoint proof
          confirming zero collision risk for this zone. Maximum trust.
 
   [   ]  Empty. No active tasks in this namespace.
@@ -36,7 +36,7 @@ concurrent task execution. Each zone represents a directory namespace.
 
   SHIELD > CONTENTION > WRITE > READ > EMPTY
 
-  Once the solver confirms disjoint paths, any CONTENTION or WRITE state is promoted to
+  Once the verifier confirms disjoint paths, any CONTENTION or WRITE state is promoted to
   SHIELD. This is the "Core Guarantee."
 
 ## Deterministic Shadowing
