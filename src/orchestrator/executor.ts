@@ -211,6 +211,17 @@ export class DynamicExecutor {
             process.env as Record<string, string>,
         );
 
+        // Inject declared secrets from host environment (never hashed, never logged)
+        const secrets = (task as any).secrets as string[] | undefined;
+        if (secrets) {
+          for (const name of secrets) {
+            const val = process.env[name];
+            if (val !== undefined) {
+              sanitizedEnv[name] = val;
+            }
+          }
+        }
+
         let finalCmd = task.cmd;
         
         // Runtime Enforcement (macOS sandbox-exec)

@@ -121,6 +121,7 @@ export function configToTasks(config: B4malConfig): TaskConfigWithId[] {
       claims: norm(t.claims),
       needsEnv: sortedSet(t.needsEnv),
       providesEnv: sortedSet(t.providesEnv),
+      secrets: sortedSet((t as any).secrets ?? []),
       env: sortedRecordKeys(t.env),
       timeout: t.timeout,
       cache: t.cache,

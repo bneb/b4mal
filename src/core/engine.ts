@@ -117,6 +117,7 @@ export class B4malEngine {
         claims: t.claims ?? [],
         needsEnv: t.envReads ?? t.needsEnv ?? [],
         providesEnv: t.envWrites ?? t.providesEnv ?? [],
+        secrets: t.secrets ?? [],
         env: t.env ?? {},
         cwd: t.cwd,
         timeout: t.timeout ?? 300_000,

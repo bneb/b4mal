@@ -53,6 +53,9 @@ export const TaskConfigSchema = z.object({
   /** Env var names this task writes (for resource-conflict detection) */
   providesEnv: z.array(z.string()).default([]),
 
+  /** Secret names this task requires (resolved at runtime, never hashed) */
+  secrets: z.array(z.string()).default([]),
+
   /** Extra env vars to inject when spawning this task */
   env: z.record(z.string()).default({}),
 
@@ -78,6 +81,7 @@ export type TaskConfig = z.infer<typeof TaskConfigSchema>;
 /** TaskConfig with id populated (lockfile/orchestrator form, after configToTasks conversion) */
 export interface TaskConfigWithId extends TaskConfig {
   id: string;
+  secrets: string[];  // resolved from env at runtime, never written to lockfile
 }
 
 // ─── Project Config ────────────────────────────────────────────────────────
