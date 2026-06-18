@@ -9,6 +9,7 @@ import { EnvSanitizer } from "../guard/env_sanitizer";
 import { ArtifactVault } from "../core/artifact_vault";
 import { ContentHasher, Semaphore } from "../core/content_hasher";
 import { SQLiteLedger } from "../core/sqlite_ledger";
+import { RemoteVault } from "../core/remote_vault";
 import { join } from "path";
 import { homedir, cpus } from "os";
 
@@ -25,10 +26,10 @@ export interface WaveResult {
 
 export interface ExecutorConfig {
     projectRoot: string;
-
     layerMergeOrder?: string[];
     concurrency?: number;
     chaos?: boolean;
+    remoteVault?: RemoteVault;
 }
 
 // ─── Executor ────────────────────────────────────────────────────────────────
@@ -174,6 +175,25 @@ export class DynamicExecutor {
             logicHash = hasher.digest("hex");
         }
 
+        // ── L2: Remote Cache Check (before L1 — shared cache is fresher) ─
+        if (logicHash && config?.remoteVault && projectRoot) {
+          try {
+            const l2Result = await config.remoteVault.checkAndPull(logicHash, projectRoot);
+            if (l2Result) {
+              return {
+                taskId: task.id,
+                exitCode: l2Result.exitCode ?? 0,
+                stdout: "[L2 cache hit — restored from remote vault]",
+                stderr: "",
+                durationMs: l2Result.durationMs ?? 0,
+                cached: true,
+              };
+            }
+          } catch {
+            // L2 failure is non-fatal — fall through to L1
+          }
+        }
+
         // ── L1: Local Cache Hit? ──────────────────────────────────────
         if (logicHash && ledger) {
             const entry = ledger.getEntry(logicHash);
@@ -268,11 +288,24 @@ export class DynamicExecutor {
             if (projectRoot && producesArtifact) {
                 try {
                     await ArtifactVault.pack(logicHash, projectRoot, writes);
-
                 } catch (err) {
-                    console.error("Pack/Upload failed:", err);
-                    // Non-fatal: if packing/uploading fails, the build still succeeded
+                    console.error("Pack failed:", err);
                 }
+            }
+
+            // L2 push (non-fatal — build continues on failure)
+            if (projectRoot && config?.remoteVault) {
+              try {
+                await config.remoteVault.pushWithMetadata(logicHash, projectRoot, {
+                  logicHash,
+                  taskId: task.id,
+                  exitCode,
+                  durationMs,
+                  signature: null,
+                });
+              } catch {
+                // L2 push failure is non-fatal
+              }
             }
         }
 

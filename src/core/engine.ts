@@ -13,6 +13,8 @@ import { DynamicExecutor, type WaveResult } from "../orchestrator/executor";
 import { FormalShadow } from "../core/formal_shadow";
 import { SQLiteLedger } from "./sqlite_ledger";
 import { ArtifactVault } from "./artifact_vault";
+import { S3Adapter } from "../remote/s3_adapter";
+import { RemoteVault } from "./remote_vault";
 import type { OrchestratorTask } from "../orchestrator/planner";
 import type { TaskConfigWithId } from "../schema";
 
@@ -125,6 +127,28 @@ export class B4malEngine {
       }));
     }
 
+    /**
+     * Create a RemoteVault if L2 cache env vars are configured.
+     * Returns null (no-op) if not configured, so builds work without L2.
+     */
+    private createRemoteVault(): RemoteVault | undefined {
+      const bucket = process.env.B4MAL_CACHE_BUCKET;
+      const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+      const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+      const region = process.env.AWS_REGION || "us-east-1";
+
+      if (!bucket || !accessKeyId || !secretAccessKey) return undefined;
+
+      const endpoint = process.env.AWS_S3_ENDPOINT;
+      const orgId = process.env.B4MAL_CACHE_ORG;
+      const adapter = new S3Adapter({
+        bucket, region, accessKeyId, secretAccessKey,
+        ...(endpoint ? { endpoint } : {}),
+        ...(orgId ? { orgId } : {}),
+      });
+      return new RemoteVault(adapter);
+    }
+
     // ── build ─────────────────────────────────────────────────────────────────
 
     /**
@@ -204,10 +228,15 @@ export class B4malEngine {
             };
         }
 
-        // Step 3: Execute (handles L1/L2 cache, EnvSanitizer, ArtifactVault)
+        // Step 3: Build remote vault from env (if configured)
+        const remoteVault = this.createRemoteVault();
+
+        // Step 4: Execute (handles L2→L1 cache waterfall, EnvSanitizer, ArtifactVault)
         const results = await DynamicExecutor.run(dag, {
             projectRoot: this.projectRoot,
             chaos: this.options.chaos,
+            concurrency: this.options.concurrency,
+            remoteVault,
         });
 
         const success = results.every(r => r.exitCode === 0);

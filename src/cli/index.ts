@@ -341,4 +341,3 @@ function printUsage(): void {
 
 main();
 
-console.log('hi');
