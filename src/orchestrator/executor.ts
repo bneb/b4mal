@@ -192,8 +192,8 @@ export class DynamicExecutor {
                 cached: true,
               };
             }
-          } catch {
-            // L2 failure is non-fatal — fall through to L1
+          } catch (err: any) {
+            process.stderr.write(`\x1b[2m[L2] pull failed: ${err?.message || err}\x1b[0m\n`);
           }
         }
 
@@ -306,8 +306,8 @@ export class DynamicExecutor {
                   durationMs,
                   signature: null,
                 });
-              } catch {
-                // L2 push failure is non-fatal
+              } catch (err: any) {
+                process.stderr.write(`\x1b[2m[L2] push failed: ${err?.message || err}\x1b[0m\n`);
               }
             }
         }
