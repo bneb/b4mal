@@ -42,12 +42,9 @@ b4mal.lock  ──[engine.normalizeLockTasks]──>  TaskConfigWithId[]  ──
                                                                               └── L2 push (RemoteVault.pushWithMetadata) [NOT YET WIRED]
 ```
 
-### The two-engine problem
+### The single engine
 
-There are **two parallel engine implementations**. The current CLI (`src/cli/index.ts`) uses `B4malEngine` from `src/core/engine.ts`. A legacy CLI (`src/cli.ts`) uses `Engine` from `src/engine.ts`. These are separate with different task types, cache systems, and DAG implementations. The legacy path is dead code — never delete `src/core/engine.ts` or `src/orchestrator/` thinking the old one is the real one.
-
-Legacy dead-code files (safe to remove, but tests may reference them):
-- `src/engine.ts`, `src/cli.ts`, `src/dag.ts`, `src/runner.ts`, `src/cache.ts`
+The CLI (`src/cli/index.ts`) uses `B4malEngine` from `src/core/engine.ts`. The orchestrator (`src/orchestrator/`) provides `WavePlanner` (DAG planning) and `DynamicExecutor` (task execution). The legacy engine (`src/engine.ts`, `src/cli.ts`, `src/dag.ts`, `src/runner.ts`, `src/cache.ts`) was removed — do not recreate these files.
 
 ### Type hierarchy
 
@@ -79,11 +76,11 @@ The verification model is set-theoretic: (W₁ ∩ (R₂ ∪ W₂)) = ∅ ∧ (W
 
 - **Bun, not Node.** Use `Bun.spawn`, `Bun.file`, `Bun.CryptoHasher`, `Bun.write`. Avoid Node-specific APIs. `require()` works but is discouraged in ESM modules.
 
-- **L2 cache is implemented but not wired.** `RemoteVault` and `S3Adapter` are complete and tested, but `DynamicExecutor.executeTask()` never calls them. The executor only checks L1. Wiring this is the #1 MVP gap.
+- **L2 cache is wired.** `RemoteVault` and `S3Adapter` are connected to `DynamicExecutor`. L2 is checked before L1 (shared cache is fresher), and results are pushed to L2 after successful L1 pack. All L2 failures are non-fatal. Set `B4MAL_CACHE_BUCKET` + `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` to enable.
 
-- **`--force` flag is parsed but ignored.** The executor always checks cache regardless.
+- **`--force` flag is parsed but the executor does not skip cache based on it.** The flag reaches the engine but `executeTask` does not check it.
 
-- **`--concurrency` flag is parsed but not propagated** to the executor, which always uses `cpus().length`.
+- **`--concurrency` is propagated** from CLI → engine options → executor config.
 
 - **Secrets were broken.** The `OrchestratorTask` interface lacked `secrets` — fixed in `96b1c9e`. Any new field added to `TaskConfigWithId` must also be added to `OrchestratorTask` and the conversion in `engine.build()`.
 
