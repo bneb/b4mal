@@ -1,14 +1,13 @@
 /**
  * b4mal watch — file watcher that re-executes affected tasks on change.
  */
-import { watch } from "fs";
+import { watch, readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { B4malEngine } from "../core/engine";
 
 const DEBOUNCE_MS = 300;
 
 function collectWatchDirs(projectRoot: string): Set<string> {
-  const { readFileSync, existsSync } = require("fs");
   const lockPath = join(projectRoot, "b4mal.lock");
   if (!existsSync(lockPath)) return new Set();
 

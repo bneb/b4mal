@@ -147,3 +147,52 @@ If two tasks claim the same non-filesystem resource, B4mal serializes them.
   }
 }
 ```
+
+### Conditional execution
+
+Use `when` to skip tasks based on platform or branch:
+
+```json
+{
+  "tasks": {
+    "deploy": {
+      "cmd": ["bun", "run", "deploy.ts"],
+      "inputs": ["dist"],
+      "when": {
+        "branch": "main",
+        "platform": ["linux"]
+      }
+    }
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `when.branch` | `string` | Glob pattern for branch name (e.g. `"main"`, `"release-*"`) |
+| `when.platform` | `string[]` | OS platforms to run on (`"darwin"`, `"linux"`, `"win32"`) |
+| `when.if` | `string` | Arbitrary condition expression (reserved for future use) |
+
+### Matrix builds
+
+Use `matrix` to generate task instances from axis values:
+
+```json
+{
+  "tasks": {
+    "build": {
+      "cmd": ["bun", "build", "--target", "$MATRIX_OS"],
+      "inputs": ["src"],
+      "outputs": ["dist"],
+      "matrix": {
+        "os": ["linux", "macos"],
+        "arch": ["x64", "arm64"]
+      }
+    }
+  }
+}
+```
+
+This generates four tasks: `build-os=linux-arch=x64`, `build-os=linux-arch=arm64`, `build-os=macos-arch=x64`, and `build-os=macos-arch=arm64`. Axis values are injected as `MATRIX_<AXIS>` env vars (e.g., `MATRIX_OS=linux`).
+
+**Limits**: Max 4 axes, 10 values per axis, 256 total combinations.

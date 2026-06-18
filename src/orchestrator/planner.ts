@@ -4,6 +4,8 @@
  */
 
 import { VolatilityForecaster } from "../core/volatility_forecaster";
+import path from "path";
+import os from "os";
 
 export interface OrchestratorTask {
     id: string;
@@ -36,7 +38,6 @@ export class WavePlanner {
         if (tasks.length === 0) return { tasks: new Map(), inDegree: new Map(), dependents: new Map(), waves: [] };
 
         const taskMap = new Map<string, OrchestratorTask>();
-        const path = require("path");
         for (const t of tasks) {
             const readClaims = new Set<string>();
             const writeClaims = new Set<string>();
@@ -233,7 +234,6 @@ export class WavePlanner {
     }
 
     private static claimsOverlap(claimA: string, claimB: string): boolean {
-        const os = require("os");
         const isCaseInsensitive = os.platform() === "win32" || os.platform() === "darwin";
         
         let a = isCaseInsensitive ? claimA.toLowerCase() : claimA;
@@ -251,7 +251,6 @@ export class WavePlanner {
         const bPath = bProtoMatch ? bProtoMatch[2] : b;
         
         if (aProto === "fs") {
-            const path = require("path");
             const absA = path.resolve("/", aPath);
             const absB = path.resolve("/", bPath);
             
