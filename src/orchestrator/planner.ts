@@ -13,6 +13,7 @@ export interface OrchestratorTask {
     reads?: string[];   // Filesystem paths read by the task
     writes?: string[];  // Filesystem paths written by the task
     secrets?: string[]; // Secret names resolved at runtime (never hashed/logged)
+    when?: { branch?: string; platform?: string[]; if?: string };
 }
 
 export interface Wave {

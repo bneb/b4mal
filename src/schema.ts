@@ -44,8 +44,9 @@ export const TaskConfigSchema = z.object({
   outputs: z.array(z.string()).default([])
     .transform(ps => ps.map(sanitizePath)),
 
-  /** Non-filesystem resource claims (e.g. "env:PORT", "db:local", "port:8080") */
-  claims: z.array(z.string()).default([]),
+  /** Non-filesystem resource claims (e.g. "env:PORT", "db:local", "port:8080"). fs: paths are sanitized. */
+  claims: z.array(z.string()).default([])
+    .transform(ps => ps.map(c => c.startsWith("fs:") ? `fs:${sanitizePath(c.slice(3))}` : c)),
 
   /** Env var names this task reads (for resource-conflict detection) */
   needsEnv: z.array(z.string()).default([]),

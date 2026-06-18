@@ -200,6 +200,7 @@ export class B4malEngine {
           reads: t.inputs,
           writes: t.outputs,
           secrets: t.secrets,
+          when: t.when,
         }));
 
         // Build a map for executor lookup (carries secrets)

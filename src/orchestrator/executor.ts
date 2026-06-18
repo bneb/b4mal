@@ -226,6 +226,29 @@ export class DynamicExecutor {
 
 
 
+        // ── Conditional execution: skip if when conditions not met ─────
+        if (task.when) {
+          const w = task.when;
+          if (w.platform && !w.platform.includes(process.platform)) {
+            return {
+              taskId: task.id, exitCode: 0,
+              stdout: `[skipped — platform ${process.platform} not in ${w.platform}]`,
+              stderr: "", durationMs: 0, cached: true,
+            };
+          }
+          if (w.branch) {
+            const branch = process.env.GIT_BRANCH || process.env.CI_COMMIT_BRANCH || "";
+            const matches = branch === w.branch || new RegExp(`^${w.branch.replace(/\*/g, ".*")}$`).test(branch);
+            if (branch && !matches) {
+              return {
+                taskId: task.id, exitCode: 0,
+                stdout: `[skipped — branch "${branch}" doesn't match "${w.branch}"]`,
+                stderr: "", durationMs: 0, cached: true,
+              };
+            }
+          }
+        }
+
         // ── Cache Miss: Execute ───────────────────────────────────────
         const start = performance.now();
 

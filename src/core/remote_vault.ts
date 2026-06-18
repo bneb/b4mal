@@ -5,7 +5,7 @@
  * The RemoteVault is a thin orchestration layer between the executor and S3Adapter.
  */
 import { join } from "path";
-import { existsSync, mkdirSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, writeFileSync, readFileSync, unlinkSync } from "fs";
 import { S3Adapter } from "../remote/s3_adapter";
 import { ArtifactVault } from "./artifact_vault";
 
@@ -143,7 +143,7 @@ export class RemoteVault {
       const result = await this.adapter.push(logicHash, tmpPath);
 
       // Clean up temp file
-      try { require("fs").unlinkSync(tmpPath); } catch {}
+      try { unlinkSync(tmpPath); } catch {}
 
       return result;
     } catch {
@@ -163,17 +163,17 @@ export class RemoteVault {
     if (!existsSync(vaultDir)) {
       mkdirSync(vaultDir, { recursive: true });
     }
-    // Strip metadata header before storing in L1 (L1 doesn't need it)
-    // But for simplicity, store the full archive with metadata in L1 too.
-    // The metadata header is transparent — ArtifactVault.unpack skips it.
-    const { renameSync } = require("fs");
-    try {
-      renameSync(tmpPath, vaultPath);
-    } catch {
-      // If rename fails (cross-device), copy instead
-      const data = require("fs").readFileSync(tmpPath);
-      require("fs").writeFileSync(vaultPath, data);
-      try { require("fs").unlinkSync(tmpPath); } catch {}
+    // Strip the metadata header before storing in L1.
+    // The S3 archive has [4-byte LE length][JSON][zstd stream].
+    // L1 expects raw zstd, so we skip the header bytes.
+    const rawData = Buffer.from(readFileSync(tmpPath));
+    const headerLen = rawData.readUInt32LE(0);
+    if (headerLen > 0 && headerLen < rawData.length - 4) {
+      const zstdData = rawData.subarray(4 + headerLen);
+      writeFileSync(vaultPath, zstdData);
+    } else {
+      // Fallback: copy as-is (shouldn't happen with valid archives)
+      writeFileSync(vaultPath, rawData);
     }
   }
 }
