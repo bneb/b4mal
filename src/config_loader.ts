@@ -38,57 +38,49 @@ function sortedRecordKeys(rec: Record<string, string> | undefined): Record<strin
  * Throws on missing file, invalid JSON, or schema validation failure.
  * Rejects config files resolved through symlinks outside projectRoot.
  */
-export function loadConfig(projectRoot: string): B4malConfig {
+function resolveConfigPath(projectRoot: string): string {
   const configPath = join(projectRoot, "b4mal.config.json");
-
   if (!existsSync(configPath)) {
-    throw new Error(
-      `Configuration file not found: b4mal.config.json (searched in ${projectRoot}). ` +
-      `Run 'b4mal init' to create one.`
-    );
+    throw new Error(`Configuration file not found: b4mal.config.json (searched in ${projectRoot}). Run 'b4mal init' to create one.`);
   }
+  return configPath;
+}
 
-  // Symlink traversal protection
+function verifyPathBoundary(configPath: string, projectRoot: string): void {
   let realConfigPath: string;
   let realRoot: string;
   try {
     realConfigPath = realpathSync(configPath);
     realRoot = realpathSync(projectRoot);
   } catch (e: any) {
-    throw new Error(
-      `Cannot resolve config file path: ${e.message}. ` +
-      `Check that b4mal.config.json exists and is accessible.`
-    );
+    throw new Error(`Cannot resolve config file path: ${e.message}. Check that b4mal.config.json exists and is accessible.`);
   }
-
-  // Normalize separators for cross-platform safety (Windows uses backslash)
   const rootPrefix = realRoot.replace(/\\/g, "/") + "/";
   const normConfig = realConfigPath.replace(/\\/g, "/");
   if (!normConfig.startsWith(rootPrefix) && normConfig !== realRoot.replace(/\\/g, "/")) {
-    throw new Error(
-      `Config file resolves outside project root: ${realConfigPath}. ` +
-      `Symlinks to files outside the project are not allowed.`
-    );
+    throw new Error(`Config file resolves outside project root: ${realConfigPath}. Symlinks to external files are not allowed.`);
   }
+}
 
+function readAndValidate(configPath: string): B4malConfig {
   let raw: unknown;
   try {
     raw = JSON.parse(readFileSync(configPath, "utf-8"));
   } catch (e: any) {
     throw new Error(`Failed to parse b4mal.config.json: ${e.message}`);
   }
-
   const result = B4malConfigSchema.safeParse(raw);
   if (!result.success) {
-    const issues = result.error.issues
-      .map(i => `  - ${i.path.join(".")}: ${i.message}`)
-      .join("\n");
-    throw new Error(
-      `Invalid configuration in b4mal.config.json:\n${issues}`
-    );
+    const issues = result.error.issues.map(i => `  - ${i.path.join(".")}: ${i.message}`).join("\n");
+    throw new Error(`Invalid configuration in b4mal.config.json:\n${issues}`);
   }
-
   return result.data;
+}
+
+export function loadConfig(projectRoot: string): B4malConfig {
+  const configPath = resolveConfigPath(projectRoot);
+  verifyPathBoundary(configPath, projectRoot);
+  return readAndValidate(configPath);
 }
 
 // ─── configToTasks ─────────────────────────────────────────────────────────
@@ -131,15 +123,7 @@ export function configToTasks(config: B4malConfig): TaskConfigWithId[] {
 
 const VALID_MATRIX_VALUE = /^[a-zA-Z0-9_.-]+$/;
 
-function expandMatrix(
-  baseId: string,
-  t: Record<string, any>,
-  matrix: Record<string, string[]>,
-): TaskConfigWithId[] {
-  const axes = Object.keys(matrix).sort(sortStrings);
-  if (axes.length === 0) return [buildTask(baseId, t)];
-
-  // Validate axis names and values
+function validateMatrixAxes(baseId: string, axes: string[], matrix: Record<string, string[]>): void {
   for (const axis of axes) {
     if (!VALID_MATRIX_VALUE.test(axis)) {
       throw new Error(`Matrix axis name "${axis}" contains invalid characters. Use [a-zA-Z0-9_.-]`);
@@ -147,30 +131,34 @@ function expandMatrix(
     if (matrix[axis].length === 0) {
       throw new Error(`Matrix axis "${axis}" for task "${baseId}" has zero values`);
     }
-    for (const val of matrix[axis]) {
-      if (!VALID_MATRIX_VALUE.test(val)) {
-        throw new Error(`Matrix value "${val}" in axis "${axis}" contains invalid characters. Use [a-zA-Z0-9_.-]`);
-      }
+    const invalidVal = matrix[axis].find(v => !VALID_MATRIX_VALUE.test(v));
+    if (invalidVal) {
+      throw new Error(`Matrix value "${invalidVal}" in axis "${axis}" contains invalid characters. Use [a-zA-Z0-9_.-]`);
     }
   }
+}
 
-  // Cartesian product with sorted values
-  let combinations: Record<string, string>[] = [{}];
-  for (const axis of axes) {
-    const next: Record<string, string>[] = [];
+function cartesianProduct(axes: string[], matrix: Record<string, string[]>): Record<string, string>[] {
+  return axes.reduce((combos, axis) => {
     const sortedVals = matrix[axis].slice().sort(sortStrings);
-    for (const combo of combinations) {
-      for (const val of sortedVals) {
-        next.push({ ...combo, [axis]: val });
-      }
-    }
-    combinations = next;
-  }
+    return combos.flatMap(combo =>
+      sortedVals.map(val => ({ ...combo, [axis]: val }))
+    );
+  }, [{}] as Record<string, string>[]);
+}
 
+function expandMatrix(
+  baseId: string,
+  t: Record<string, any>,
+  matrix: Record<string, string[]>,
+): TaskConfigWithId[] {
+  const axes = Object.keys(matrix).sort(sortStrings);
+  if (axes.length === 0) return [buildTask(baseId, t)];
+  validateMatrixAxes(baseId, axes, matrix);
+  const combinations = cartesianProduct(axes, matrix);
   return combinations.map((combo) => {
     const suffix = axes.map(a => `${a}=${combo[a]}`).join("-");
-    const taskId = `${baseId}-${suffix}`;
-    return buildTask(taskId, t, combo);
+    return buildTask(`${baseId}-${suffix}`, t, combo);
   });
 }
 
