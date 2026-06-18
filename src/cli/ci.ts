@@ -37,21 +37,8 @@ export class CICommand {
     static async execute(args: string[]): Promise<void> {
         banner("Generating Zero-Configuration CI Workflow…");
 
-        // Simple arg parsing
-        let target = "github";
-        let dryRun = args.includes("--dry-run") || args.includes("--print");
-        let force = args.includes("--force") || args.includes("-f");
-
-        for (const arg of args) {
-            if (arg.startsWith("--target=")) {
-                target = arg.split("=")[1];
-            }
-        }
-        const targetIndex = args.indexOf("--target");
-        if (targetIndex !== -1 && args.length > targetIndex + 1 && !args[targetIndex + 1].startsWith("-")) {
-            target = args[targetIndex + 1];
-        }
-
+        const dryRun = args.includes("--dry-run") || args.includes("--print");
+        const force = args.includes("--force") || args.includes("-f");
         const target = this.parseTarget(args);
         const cwd = process.cwd();
         info(`Detecting toolchains for ${target}...`);

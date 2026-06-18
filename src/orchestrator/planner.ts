@@ -12,6 +12,7 @@ export interface OrchestratorTask {
     deps: string[];     // Task IDs this task depends on
     reads?: string[];   // Filesystem paths read by the task
     writes?: string[];  // Filesystem paths written by the task
+    secrets?: string[]; // Secret names resolved at runtime (never hashed/logged)
 }
 
 export interface Wave {

@@ -63,8 +63,10 @@ export const TaskConfigSchema = z.object({
     if: z.string().optional().describe("Arbitrary condition expression"),
   }).optional(),
 
-  /** Matrix build: generate N task instances from axis values */
-  matrix: z.record(z.array(z.string())).optional().describe("Axis values for matrix expansion"),
+  /** Matrix build: generate N task instances from axis values. Max 4 axes, 10 values/axis, 256 combinations. */
+  matrix: z.record(z.array(z.string()).max(10)).optional()
+    .refine(m => !m || Object.keys(m).length <= 4, "Max 4 matrix axes")
+    .refine(m => !m || cartesianSize(m) <= 256, "Max 256 matrix combinations"),
 
   /** Extra env vars to inject when spawning this task */
   env: z.record(z.string()).default({}),
@@ -111,6 +113,14 @@ function allDepsResolve(tasks: Record<string, TaskConfig>): boolean {
     }
   }
   return true;
+}
+
+export function cartesianSize(matrix: Record<string, string[]>): number {
+  let size = 1;
+  for (const vals of Object.values(matrix)) {
+    size *= vals.length;
+  }
+  return size;
 }
 
 function hasNoCycles(tasks: Record<string, TaskConfig>): boolean {

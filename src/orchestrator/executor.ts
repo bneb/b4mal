@@ -212,8 +212,8 @@ export class DynamicExecutor {
         );
 
         // Inject declared secrets from host environment (never hashed, never logged)
-        const secrets = (task as any).secrets as string[] | undefined;
-        if (secrets) {
+        const secrets = task.secrets;
+        if (secrets && secrets.length > 0) {
           for (const name of secrets) {
             const val = process.env[name];
             if (val !== undefined) {

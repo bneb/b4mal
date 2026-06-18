@@ -117,8 +117,19 @@ export function configToTasks(config: B4malConfig): TaskConfigWithId[] {
     }
   }
 
+  // Detect ID collisions (can happen when manual task name matches expanded matrix name)
+  const seen = new Set<string>();
+  for (const task of tasks) {
+    if (seen.has(task.id)) {
+      throw new Error(`Duplicate task ID after matrix expansion: "${task.id}". Check for collisions between manual task names and matrix-generated names.`);
+    }
+    seen.add(task.id);
+  }
+
   return tasks;
 }
+
+const VALID_MATRIX_VALUE = /^[a-zA-Z0-9_.-]+$/;
 
 function expandMatrix(
   baseId: string,
@@ -128,19 +139,35 @@ function expandMatrix(
   const axes = Object.keys(matrix).sort(sortStrings);
   if (axes.length === 0) return [buildTask(baseId, t)];
 
-  // Cartesian product
+  // Validate axis names and values
+  for (const axis of axes) {
+    if (!VALID_MATRIX_VALUE.test(axis)) {
+      throw new Error(`Matrix axis name "${axis}" contains invalid characters. Use [a-zA-Z0-9_.-]`);
+    }
+    if (matrix[axis].length === 0) {
+      throw new Error(`Matrix axis "${axis}" for task "${baseId}" has zero values`);
+    }
+    for (const val of matrix[axis]) {
+      if (!VALID_MATRIX_VALUE.test(val)) {
+        throw new Error(`Matrix value "${val}" in axis "${axis}" contains invalid characters. Use [a-zA-Z0-9_.-]`);
+      }
+    }
+  }
+
+  // Cartesian product with sorted values
   let combinations: Record<string, string>[] = [{}];
   for (const axis of axes) {
     const next: Record<string, string>[] = [];
+    const sortedVals = matrix[axis].slice().sort(sortStrings);
     for (const combo of combinations) {
-      for (const val of matrix[axis]) {
+      for (const val of sortedVals) {
         next.push({ ...combo, [axis]: val });
       }
     }
     combinations = next;
   }
 
-  return combinations.map((combo, i) => {
+  return combinations.map((combo) => {
     const suffix = axes.map(a => `${a}=${combo[a]}`).join("-");
     const taskId = `${baseId}-${suffix}`;
     return buildTask(taskId, t, combo);

@@ -157,7 +157,16 @@ export class B4malEngine {
           deps: t.dependencies,
           reads: t.inputs,
           writes: t.outputs,
+          secrets: t.secrets,
         }));
+
+        // Build a map for executor lookup (carries secrets)
+        const taskExtras = new Map<string, { secrets?: string[] }>();
+        for (const t of lockTasks) {
+          if (t.secrets && t.secrets.length > 0) {
+            taskExtras.set(t.id, { secrets: t.secrets });
+          }
+        }
 
         // Step 1: Plan waves (we need waves before verification now)
         const dag = WavePlanner.planDAG(tasks);
