@@ -56,6 +56,16 @@ export const TaskConfigSchema = z.object({
   /** Secret names this task requires (resolved at runtime, never hashed) */
   secrets: z.array(z.string()).default([]),
 
+  /** Conditional execution: skip task unless conditions are met */
+  when: z.object({
+    branch: z.string().optional().describe("Glob pattern for branch name"),
+    platform: z.array(z.string()).optional().describe("OS platforms to run on"),
+    if: z.string().optional().describe("Arbitrary condition expression"),
+  }).optional(),
+
+  /** Matrix build: generate N task instances from axis values */
+  matrix: z.record(z.array(z.string())).optional().describe("Axis values for matrix expansion"),
+
   /** Extra env vars to inject when spawning this task */
   env: z.record(z.string()).default({}),
 
@@ -81,7 +91,8 @@ export type TaskConfig = z.infer<typeof TaskConfigSchema>;
 /** TaskConfig with id populated (lockfile/orchestrator form, after configToTasks conversion) */
 export interface TaskConfigWithId extends TaskConfig {
   id: string;
-  secrets: string[];  // resolved from env at runtime, never written to lockfile
+  secrets: string[];
+  when?: { branch?: string; platform?: string[]; if?: string };
 }
 
 // ─── Project Config ────────────────────────────────────────────────────────

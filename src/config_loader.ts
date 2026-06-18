@@ -102,37 +102,81 @@ export function loadConfig(projectRoot: string): B4malConfig {
  */
 export function configToTasks(config: B4malConfig): TaskConfigWithId[] {
   const ids = Object.keys(config.tasks).sort(sortStrings);
+  const tasks: TaskConfigWithId[] = [];
 
-  return ids.map(id => {
+  for (const id of ids) {
     const t = config.tasks[id];
+    const matrix = (t as any).matrix as Record<string, string[]> | undefined;
 
-    // Normalize backslashes in all path-like fields (defense in depth —
-    // Zod transform handles this for validated configs, but direct callers
-    // may pass raw objects with undefined fields).
-    const norm = (arr: string[] | undefined): string[] =>
-      sortedSet((arr ?? []).map(p => p.replace(/\\/g, "/")));
-
-    const task: TaskConfigWithId = {
-      id,
-      cmd: [...t.cmd],
-      dependencies: sortedSet(t.dependencies),
-      inputs: norm(t.inputs),
-      outputs: norm(t.outputs),
-      claims: norm(t.claims),
-      needsEnv: sortedSet(t.needsEnv),
-      providesEnv: sortedSet(t.providesEnv),
-      secrets: sortedSet((t as any).secrets ?? []),
-      env: sortedRecordKeys(t.env),
-      timeout: t.timeout,
-      cache: t.cache,
-    };
-
-    if (t.cwd) {
-      task.cwd = t.cwd.replace(/\\/g, "/");
+    if (matrix) {
+      // Expand matrix: cartesian product of axis values
+      const expanded = expandMatrix(id, t as any, matrix);
+      tasks.push(...expanded);
+    } else {
+      tasks.push(buildTask(id, t as any));
     }
+  }
 
-    return task;
+  return tasks;
+}
+
+function expandMatrix(
+  baseId: string,
+  t: Record<string, any>,
+  matrix: Record<string, string[]>,
+): TaskConfigWithId[] {
+  const axes = Object.keys(matrix).sort(sortStrings);
+  if (axes.length === 0) return [buildTask(baseId, t)];
+
+  // Cartesian product
+  let combinations: Record<string, string>[] = [{}];
+  for (const axis of axes) {
+    const next: Record<string, string>[] = [];
+    for (const combo of combinations) {
+      for (const val of matrix[axis]) {
+        next.push({ ...combo, [axis]: val });
+      }
+    }
+    combinations = next;
+  }
+
+  return combinations.map((combo, i) => {
+    const suffix = axes.map(a => `${a}=${combo[a]}`).join("-");
+    const taskId = `${baseId}-${suffix}`;
+    return buildTask(taskId, t, combo);
   });
+}
+
+function buildTask(
+  id: string,
+  t: Record<string, any>,
+  matrixVars?: Record<string, string>,
+): TaskConfigWithId {
+  const norm = (arr: string[] | undefined): string[] =>
+    sortedSet((arr ?? []).map((p: string) => p.replace(/\\/g, "/")));
+
+  const env = sortedRecordKeys(t.env ?? {});
+  if (matrixVars) {
+    for (const [k, v] of Object.entries(matrixVars)) {
+      env[`MATRIX_${k.toUpperCase()}`] = v;
+    }
+  }
+
+  return {
+    id,
+    cmd: t.cmd ?? [],
+    dependencies: sortedSet(t.dependencies ?? []),
+    inputs: norm(t.inputs),
+    outputs: norm(t.outputs),
+    claims: norm(t.claims),
+    needsEnv: sortedSet(t.needsEnv ?? []),
+    providesEnv: sortedSet(t.providesEnv ?? []),
+    secrets: sortedSet(t.secrets ?? []),
+    env,
+    timeout: t.timeout ?? 300_000,
+    cache: t.cache ?? true,
+    when: t.when,
+  };
 }
 
 // ─── writeLockfileAtomic ───────────────────────────────────────────────────
