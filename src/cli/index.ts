@@ -186,6 +186,14 @@ async function main() {
                 process.exit(0);
             }
 
+            // ── watch ────────────────────────────────────────────────────────
+            case "watch":
+            case "dev": {
+                const { WatchCommand } = await import("./watch");
+                await WatchCommand.execute(positionals.slice(3));
+                break;
+            }
+
             // ── clean ─────────────────────────────────────────────────────────
             case "clean": {
                 banner("Purging Artifact Vault and SQLite Ledger…");
