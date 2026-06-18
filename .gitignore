@@ -6,3 +6,4 @@ crucible_workspace/
 *.db
 *.db-wal
 *.db-shm
+scratch_check_domains.py
