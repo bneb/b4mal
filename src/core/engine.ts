@@ -14,6 +14,7 @@ import { FormalShadow } from "../core/formal_shadow";
 import { SQLiteLedger } from "./sqlite_ledger";
 import { ArtifactVault } from "./artifact_vault";
 import type { OrchestratorTask } from "../orchestrator/planner";
+import type { TaskConfigWithId } from "../schema";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -95,6 +96,34 @@ export class B4malEngine {
         writeFileSync(this.lockPath, JSON.stringify(tasks, null, 2), "utf-8");
     }
 
+    /**
+     * Normalize raw lockfile JSON (old flat array or new envelope format)
+     * into a unified TaskConfigWithId array with canonical field names.
+     */
+    private normalizeLockTasks(raw: any): TaskConfigWithId[] {
+      let entries: any[];
+      if (Array.isArray(raw)) {
+        entries = raw;
+      } else {
+        entries = raw.tasks ?? [];
+      }
+
+      return entries.map((t: any) => ({
+        id: String(t.id ?? ""),
+        cmd: t.cmd ?? [],
+        dependencies: t.deps ?? t.dependencies ?? [],
+        inputs: t.reads ?? t.inputs ?? [],
+        outputs: t.writes ?? t.outputs ?? [],
+        claims: t.claims ?? [],
+        needsEnv: t.envReads ?? t.needsEnv ?? [],
+        providesEnv: t.envWrites ?? t.providesEnv ?? [],
+        env: t.env ?? {},
+        cwd: t.cwd,
+        timeout: t.timeout ?? 300_000,
+        cache: t.cache ?? true,
+      }));
+    }
+
     // ── build ─────────────────────────────────────────────────────────────────
 
     /**
@@ -112,27 +141,41 @@ export class B4malEngine {
             );
         }
 
-        const tasks: OrchestratorTask[] = JSON.parse(
-            readFileSync(this.lockPath, "utf-8")
-        );
+        const raw = JSON.parse(readFileSync(this.lockPath, "utf-8"));
+        const lockTasks = this.normalizeLockTasks(raw);
+
+        // Convert to OrchestratorTask for planner compatibility
+        const tasks: OrchestratorTask[] = lockTasks.map(t => ({
+          id: t.id,
+          cmd: t.cmd,
+          claims: [
+            ...t.inputs.map((p: string) => `fs:${p}`),
+            ...t.outputs.map((p: string) => `fs:${p}`),
+            ...t.claims,
+          ],
+          deps: t.dependencies,
+          reads: t.inputs,
+          writes: t.outputs,
+        }));
 
         // Step 1: Plan waves (we need waves before verification now)
         const dag = WavePlanner.planDAG(tasks);
         const waves = dag.waves;
 
         // Step 2: Formal Prefix Tree verification of EACH WAVE
-        const taskMap = new Map(tasks.map(t => [t.id, t]));
+        const taskMap = new Map(lockTasks.map(t => [t.id, t]));
         const allConflicts: any[] = [];
 
         for (const wave of waves) {
             const waveClaims = wave.taskIds.map(id => {
-                const t = taskMap.get(id)!;
+                const t = taskMap.get(id);
+                if (!t) throw new Error(`Wave references unknown task: ${id}`);
                 return {
                     id: t.id,
-                    reads: (t as any).reads ?? [],
-                    writes: (t as any).writes ?? [],
-                    envReads: (t as any).envReads ?? [],
-                    envWrites: (t as any).envWrites ?? [],
+                    reads: t.inputs,
+                    writes: t.outputs,
+                    envReads: t.needsEnv,
+                    envWrites: t.providesEnv,
                 };
             });
 
@@ -170,20 +213,19 @@ export class B4malEngine {
             throw new Error(`No b4mal.lock found.`);
         }
 
-        const tasks: OrchestratorTask[] = JSON.parse(
-            readFileSync(this.lockPath, "utf-8")
-        );
+        const raw = JSON.parse(readFileSync(this.lockPath, "utf-8"));
+        const lockTasks = this.normalizeLockTasks(raw);
 
-        const claims = tasks.map(t => ({
+        const claims = lockTasks.map(t => ({
             id: t.id,
-            reads: (t as any).reads ?? [],
-            writes: (t as any).writes ?? [],
-            envReads: (t as any).envReads ?? [],
-            envWrites: (t as any).envWrites ?? [],
+            reads: t.inputs,
+            writes: t.outputs,
+            envReads: t.needsEnv,
+            envWrites: t.providesEnv,
         }));
 
         const deps = new Map<string, string[]>();
-        for (const t of tasks) deps.set(t.id, t.deps);
+        for (const t of lockTasks) deps.set(t.id, t.dependencies);
 
         return await FormalShadow.detectShadowing(claims, deps);
     }
@@ -198,12 +240,21 @@ export class B4malEngine {
             throw new Error(`No b4mal.lock found. Run 'b4mal init' first.`);
         }
 
-        const tasks: OrchestratorTask[] = JSON.parse(
-            readFileSync(this.lockPath, "utf-8")
-        );
+        const raw = JSON.parse(readFileSync(this.lockPath, "utf-8"));
+        const lockTasks = this.normalizeLockTasks(raw);
+
+        // Convert to OrchestratorTask for planner compatibility
+        const tasks: OrchestratorTask[] = lockTasks.map(t => ({
+          id: t.id,
+          cmd: t.cmd,
+          claims: [...t.inputs.map((p: string) => `fs:${p}`), ...t.outputs.map((p: string) => `fs:${p}`), ...t.claims],
+          deps: t.dependencies,
+          reads: t.inputs,
+          writes: t.outputs,
+        }));
 
         const dag = WavePlanner.planDAG(tasks);
-        
+
         const payload = JSON.stringify({
             waves: dag.waves,
             totalTasks: tasks.length
