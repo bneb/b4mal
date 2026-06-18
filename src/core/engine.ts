@@ -78,13 +78,17 @@ export class B4malEngine {
         const clusterEngine = new ClusterEngine();
         const proposals = clusterEngine.analyze(graph);
 
+        // Try to infer real commands from package.json scripts
+        const pkgScripts = this.readPackageScripts();
+
         // Convert ApertureProposals → OrchestratorTask[] for the lockfile.
-        // Auto-accept high-confidence proposals (>= 0.5). Each proposal
-        // becomes a task whose cmd is a no-op placeholder (populated by
-        // the user or the Interview UI in production).
+        // When a task id matches a package.json script name, use that script
+        // as the command instead of a placeholder echo.
         const tasks: OrchestratorTask[] = proposals.map(p => ({
             id: p.id,
-            cmd: ["echo", p.id],   // Placeholder command — user fills these in
+            cmd: pkgScripts[p.id]
+              ? [pkgScripts[p.id]]
+              : ["echo", `[TODO] Define command for ${p.id} in b4mal.config.json`],
             claims: p.claims,
             deps: [],
             reads:  p.claims.filter(c => c.startsWith("fs:")).map(c => c.slice(3)),
@@ -147,6 +151,20 @@ export class B4malEngine {
         ...(orgId ? { orgId } : {}),
       });
       return new RemoteVault(adapter);
+    }
+
+    /**
+     * Read package.json scripts if available, for smarter init defaults.
+     */
+    private readPackageScripts(): Record<string, string> {
+      try {
+        const pkgPath = join(this.projectRoot, "package.json");
+        if (existsSync(pkgPath)) {
+          const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+          return pkg.scripts ?? {};
+        }
+      } catch {}
+      return {};
     }
 
     // ── build ─────────────────────────────────────────────────────────────────
@@ -236,6 +254,7 @@ export class B4malEngine {
             projectRoot: this.projectRoot,
             chaos: this.options.chaos,
             concurrency: this.options.concurrency,
+            force: this.options.force,
             remoteVault,
         });
 

@@ -29,6 +29,7 @@ export interface ExecutorConfig {
     layerMergeOrder?: string[];
     concurrency?: number;
     chaos?: boolean;
+    force?: boolean;
     remoteVault?: RemoteVault;
 }
 
@@ -175,8 +176,10 @@ export class DynamicExecutor {
             logicHash = hasher.digest("hex");
         }
 
+        const skipCache = config?.force === true;
+
         // ── L2: Remote Cache Check (before L1 — shared cache is fresher) ─
-        if (logicHash && config?.remoteVault && projectRoot) {
+        if (!skipCache && logicHash && config?.remoteVault && projectRoot) {
           try {
             const l2Result = await config.remoteVault.checkAndPull(logicHash, projectRoot);
             if (l2Result) {
@@ -195,7 +198,7 @@ export class DynamicExecutor {
         }
 
         // ── L1: Local Cache Hit? ──────────────────────────────────────
-        if (logicHash && ledger) {
+        if (!skipCache && logicHash && ledger) {
             const entry = ledger.getEntry(logicHash);
             if (entry) {
                 // Tasks with no FS writes (typecheck, test) cache via ledger only —
