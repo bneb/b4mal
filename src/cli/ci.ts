@@ -1,6 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
-import { CIEmitter } from "../shim/ci_emitter";
+import { CIEmitter, type CITarget } from "../shim/ci_emitter";
+
+const VALID_TARGETS: CITarget[] = ["github", "gitlab", "circleci", "buildkite", "bitbucket"];
 
 // ─── ANSI colour helpers ──────────────────────────────────────────────────────
 const c = {
@@ -50,15 +52,12 @@ export class CICommand {
             target = args[targetIndex + 1];
         }
 
-        if (target !== "github") {
-            process.stderr.write(`${c.yellow}[FAIL] Currently only --target github is supported.${c.reset}\n`);
-            process.exit(1);
-        }
-
+        const target = this.parseTarget(args);
         const cwd = process.cwd();
-        info("Detecting toolchains and resolving DAG...");
-        
-        const yaml = CIEmitter.emitGithubActions({ cwd });
+        info(`Detecting toolchains for ${target}...`);
+
+        const yaml = this.emitFor(target, cwd);
+        const outPath = this.resolveOutputPath(target, cwd);
 
         if (dryRun) {
             process.stdout.write(`\n${c.dim}--- b4mal-ci.yml ---${c.reset}\n`);
@@ -67,25 +66,62 @@ export class CICommand {
             ok("Dry run complete.");
             return;
         }
-        
-        const gitRoot = this.findGitRoot(cwd);
-        const githubDir = path.join(gitRoot, ".github", "workflows");
-        if (!fs.existsSync(githubDir)) {
-            fs.mkdirSync(githubDir, { recursive: true });
-        }
 
-        const outPath = path.join(githubDir, "b4mal-ci.yml");
-        
-        if (fs.existsSync(outPath) && !force) {
-            warn(`Workflow file already exists at ${path.relative(cwd, outPath)}`);
-            process.stderr.write(`${c.red}[FAIL] Refusing to overwrite existing workflow without --force flag.${c.reset}\n`);
+        this.ensureDir(path.dirname(outPath));
+        this.writeIfNotExists(outPath, yaml, force, cwd);
+        ok(`Generated ${target} CI workflow at: ${path.relative(cwd, outPath)}`);
+        info("Commit this file to enable B4mal on your CI pipeline.");
+        process.stdout.write(`\n   ${c.bold}Tip: Run b4mal build locally to warm the cache before your first CI run.${c.reset}\n\n`);
+    }
+
+    private static parseTarget(args: string[]): CITarget {
+        let target: string = "github";
+        for (let i = 0; i < args.length; i++) {
+            if (args[i].startsWith("--target=")) {
+                target = args[i].split("=")[1];
+            } else if (args[i] === "--target" && i + 1 < args.length && !args[i + 1].startsWith("-")) {
+                target = args[i + 1];
+            }
+        }
+        if (!VALID_TARGETS.includes(target as CITarget)) {
+            process.stderr.write(`${c.red}[FAIL] Unknown target: "${target}". Valid: ${VALID_TARGETS.join(", ")}${c.reset}\n`);
             process.exit(1);
         }
+        return target as CITarget;
+    }
 
-        fs.writeFileSync(outPath, yaml);
+    private static emitFor(target: CITarget, cwd: string): string {
+        const opts = { cwd };
+        switch (target) {
+            case "github":    return CIEmitter.emitGithubActions(opts);
+            case "gitlab":    return CIEmitter.emitGitLabCI(opts);
+            case "circleci":  return CIEmitter.emitCircleCI(opts);
+            case "buildkite": return CIEmitter.emitBuildkite(opts);
+            case "bitbucket": return CIEmitter.emitBitbucket(opts);
+        }
+    }
 
-        ok(`Generated natively optimized GitHub Actions workflow at: ${path.relative(cwd, outPath)}`);
-        info("Global remote caching via actions/cache is enabled.");
-        process.stdout.write(`\n   ${c.bold}Tip: Commit this file to git to run B4mal on your next push.${c.reset}\n\n`);
+    private static resolveOutputPath(target: CITarget, cwd: string): string {
+        const gitRoot = this.findGitRoot(cwd);
+        switch (target) {
+            case "github":    return path.join(gitRoot, ".github", "workflows", "b4mal-ci.yml");
+            case "gitlab":    return path.join(gitRoot, ".gitlab-ci.yml");
+            case "circleci":  return path.join(gitRoot, ".circleci", "config.yml");
+            case "buildkite": return path.join(gitRoot, ".buildkite", "pipeline.yml");
+            case "bitbucket": return path.join(gitRoot, "bitbucket-pipelines.yml");
+        }
+    }
+
+    private static ensureDir(dir: string): void {
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    }
+
+    private static writeIfNotExists(outPath: string, content: string, force: boolean, cwd: string): void {
+        if (fs.existsSync(outPath) && !force) {
+            warn(`Workflow file already exists at ${path.relative(cwd, outPath)}`);
+            process.stderr.write(`${c.red}[FAIL] Refusing to overwrite without --force flag.${c.reset}\n`);
+            process.exit(1);
+        }
+        fs.writeFileSync(outPath, content);
     }
 }
