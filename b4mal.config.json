@@ -1,0 +1,19 @@
+{
+  "tasks": {
+    "typecheck": {
+      "cmd": ["bunx", "tsc", "--noEmit"],
+      "inputs": ["src"]
+    },
+    "test": {
+      "cmd": ["bun", "test", "tests/formal_shadow.test.ts", "tests/dag.test.ts", "tests/performance.test.ts"],
+      "inputs": ["src", "tests"],
+      "dependencies": ["typecheck"]
+    },
+    "build": {
+      "cmd": ["bun", "build", "src/cli/index.ts", "--outdir", "dist", "--target", "bun"],
+      "inputs": ["src"],
+      "outputs": ["dist"],
+      "dependencies": ["typecheck", "test"]
+    }
+  }
+}

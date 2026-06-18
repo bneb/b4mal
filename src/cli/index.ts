@@ -17,7 +17,8 @@
 // Unhandled rejections are caught globally — a build tool never exits 0 on crash.
 
 import { parseArgs } from "util";
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync, existsSync } from "fs";
+import { join } from "path";
 import { B4malEngine } from "../core/engine";
 import { runDemo } from "./demo";
 
@@ -60,6 +61,8 @@ async function main() {
                 force: { type: "boolean", short: "f", default: false },
                 debug: { type: "boolean", short: "d", default: false },
                 concurrency: { type: "string", short: "c" },
+                sync: { type: "boolean" },
+                "from-config": { type: "boolean" },
                 chaos: { type: "boolean" },
                 help: { type: "boolean", short: "h", default: false },
             },
@@ -143,6 +146,20 @@ async function main() {
             case "build": {
                 banner("Engaging Wave Orchestrator…");
 
+                // Check for b4mal.config.json and sync if needed
+                const syncFlag = values.sync || values["from-config"];
+                const configPath = join(process.cwd(), "b4mal.config.json");
+                if (syncFlag || existsSync(configPath)) {
+                  const { loadConfig, configToTasks, writeLockfileAtomic, isConfigStale } = await import("../config_loader");
+                  if (syncFlag || isConfigStale(process.cwd())) {
+                    info("Loading b4mal.config.json...");
+                    const config = loadConfig(process.cwd());
+                    const tasks = configToTasks(config);
+                    writeLockfileAtomic(tasks, join(process.cwd(), "b4mal.lock"));
+                    if (syncFlag) info("Lockfile regenerated from config (--sync).");
+                  }
+                }
+
                 const result = await engine.build({ force: values.force });
 
                 if (!result.verified) {
@@ -184,6 +201,13 @@ async function main() {
 
                 ok(`Build complete. ${result.results.length} tasks, ${hits} cache hits.`);
                 process.exit(0);
+            }
+
+            // ── remote ──────────────────────────────────────────────────────
+            case "remote": {
+                const { RemoteCommand } = await import("./remote");
+                await RemoteCommand.execute(positionals.slice(3));
+                break;
             }
 
             // ── watch ────────────────────────────────────────────────────────
