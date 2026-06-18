@@ -14,8 +14,8 @@
 set -e
 
 # ── Configuration ─────────────────────────────────
-VERSION="${B4MAL_VERSION:-v1.0.0}"
-REPO="https://github.com/bneb/b4mal"
+VERSION="${B4MAL_VERSION:-v0.1.0}"
+REPO="https://github.com/b4mal/b4mal"
 BASE_URL="${B4MAL_BASE_URL:-${REPO}/releases/download/${VERSION}}"
 CONFIG_DIR="${HOME}/.b4mal"
 INSTALL_DIR="${HOME}/.local/bin"
@@ -101,17 +101,22 @@ fi
 
 info "Fetching ${BOLD}${BINARY_NAME}${NC} ..."
 
-# Use curl (preferred) or wget
+# Use curl (preferred) or wget. Falls back to npm on 404.
 if command -v curl >/dev/null 2>&1; then
     HTTP_CODE=$(curl -fsSL -w '%{http_code}' -o "${INSTALL_PATH}.tmp" "${DOWNLOAD_URL}" 2>/dev/null || echo "000")
     if [ "${HTTP_CODE}" = "000" ] || [ "${HTTP_CODE}" -ge 400 ] 2>/dev/null; then
         rm -f "${INSTALL_PATH}.tmp"
-        fail "Download failed (HTTP ${HTTP_CODE}). URL: ${DOWNLOAD_URL}"
+        if [ "${HTTP_CODE}" = "404" ]; then
+            info "Prebuilt binary not available (HTTP 404). Installing via npm..."
+            command -v bun >/dev/null 2>&1 && bun install -g b4mal && ok "Installed via bun." && exit 0
+            command -v npm  >/dev/null 2>&1 && npm install -g b4mal  && ok "Installed via npm." && exit 0
+        fi
+        fail "Download failed (HTTP ${HTTP_CODE}). Install manually: bun install -g b4mal"
     fi
 elif command -v wget >/dev/null 2>&1; then
-    wget -q -O "${INSTALL_PATH}.tmp" "${DOWNLOAD_URL}" || fail "Download failed. URL: ${DOWNLOAD_URL}"
+    wget -q -O "${INSTALL_PATH}.tmp" "${DOWNLOAD_URL}" || fail "Download failed. Install manually: bun install -g b4mal"
 else
-    fail "Neither curl nor wget found. Please install one and retry."
+    fail "Neither curl nor wget found. Install via: bun install -g b4mal"
 fi
 
 # Atomic replace: only overwrite after successful download
