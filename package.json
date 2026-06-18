@@ -9,7 +9,10 @@
   "scripts": {
     "dev": "bun run src/cli/index.ts",
     "test": "bun test",
-    "bench": "bun run benchmarks/cold-start.ts && bun run benchmarks/parallel-overhead.ts"
+    "bench": "bun run benchmarks/cold-start.ts && bun run benchmarks/parallel-overhead.ts",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
