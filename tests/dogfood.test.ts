@@ -81,11 +81,16 @@ afterAll(async () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("Dogfood lockfile", () => {
+    function getTasks(raw: string): any[] {
+      const parsed = JSON.parse(raw);
+      // Support both v1 flat array and v2 envelope format
+      return Array.isArray(parsed) ? parsed : (parsed.tasks ?? []);
+    }
+
     test("b4mal.lock is valid JSON with 3 tasks", async () => {
         const raw = await fs.readFile(LOCK_PATH, "utf-8");
-        const tasks = JSON.parse(raw);
+        const tasks = getTasks(raw);
 
-        expect(Array.isArray(tasks)).toBe(true);
         expect(tasks).toHaveLength(3);
 
         const ids = tasks.map((t: any) => t.id);
@@ -96,19 +101,20 @@ describe("Dogfood lockfile", () => {
 
     test("task dependency graph is a valid DAG", async () => {
         const raw = await fs.readFile(LOCK_PATH, "utf-8");
-        const tasks: any[] = JSON.parse(raw);
-        const idSet = new Set(tasks.map(t => t.id));
+        const tasks = getTasks(raw);
+        const idSet = new Set(tasks.map((t: any) => t.id));
 
         for (const task of tasks) {
-            for (const dep of task.deps) {
+            for (const dep of (task.deps || task.dependencies || [])) {
                 expect(idSet.has(dep)).toBe(true);
             }
         }
 
         // build must depend on both typecheck and test
-        const build = tasks.find(t => t.id === "build");
-        expect(build.deps).toContain("typecheck");
-        expect(build.deps).toContain("test");
+        const build = tasks.find((t: any) => t.id === "build");
+        const buildDeps = build.deps || build.dependencies || [];
+        expect(buildDeps).toContain("typecheck");
+        expect(buildDeps).toContain("test");
     });
 });
 
