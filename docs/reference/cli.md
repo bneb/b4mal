@@ -79,6 +79,23 @@ b4mal lsp
 
 Provides real-time collision diagnostics in your editor when editing `b4mal.config.json`.
 
+### VS Code
+
+Install the B4mal extension:
+
+```bash
+cd vscode-extension && npm install && npx vsce package
+code --install-extension b4mal-0.1.0.vsix
+```
+
+Or use the LSP directly by adding to `settings.json`:
+
+```json
+{
+  "b4mal.lsp.path": "/path/to/b4mal"
+}
+```
+
 ## `b4mal remote status`
 
 Check remote cache (L2) connectivity and statistics.
