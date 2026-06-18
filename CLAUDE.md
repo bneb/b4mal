@@ -78,7 +78,7 @@ The verification model is set-theoretic: (W₁ ∩ (R₂ ∪ W₂)) = ∅ ∧ (W
 
 - **L2 cache is wired.** `RemoteVault` and `S3Adapter` are connected to `DynamicExecutor`. L2 is checked before L1 (shared cache is fresher), and results are pushed to L2 after successful L1 pack. All L2 failures are non-fatal. Set `B4MAL_CACHE_BUCKET` + `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` to enable.
 
-- **`--force` flag is parsed but the executor does not skip cache based on it.** The flag reaches the engine but `executeTask` does not check it.
+- **`--force` flag** — parsed by CLI, passed through engine to executor (`config.force`), skips both L2 and L1 cache when true.
 
 - **`--concurrency` is propagated** from CLI → engine options → executor config.
 
