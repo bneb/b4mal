@@ -397,6 +397,6 @@ describe("backwards compatibility (placeholder)", () => {
     expect(tasks[0].dependencies).toEqual(["typecheck"]);
   });
 
-  test.todo("Warning emitted when both old and new field names are present in lockfile");
+  test.todo("Warning emitted when both old and new field names are present in lockfile", () => {});
 });
 

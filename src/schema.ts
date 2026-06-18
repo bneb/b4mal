@@ -91,9 +91,20 @@ export const TaskConfigSchema = z.object({
 export type TaskConfig = z.infer<typeof TaskConfigSchema>;
 
 /** TaskConfig with id populated (lockfile/orchestrator form, after configToTasks conversion) */
-export interface TaskConfigWithId extends TaskConfig {
+export interface TaskConfigWithId {
   id: string;
-  secrets: string[];
+  cmd: string[];
+  dependencies: string[];
+  inputs: string[];
+  outputs: string[];
+  claims: string[];
+  needsEnv: string[];
+  providesEnv: string[];
+  secrets?: string[];
+  env: Record<string, string>;
+  cwd?: string;
+  timeout: number;
+  cache: boolean;
   when?: { branch?: string; platform?: string[]; if?: string };
 }
 
