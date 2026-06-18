@@ -44,6 +44,11 @@ function depsCommand(ti: ToolchainInfo): string {
 
 function githubJobBody(toolchain: string, deps: string, version: string): string {
   return `
+    # Uncomment these if your DAG requires publishing to registries or cloud providers
+    # contents: write
+    # id-token: write
+    # packages: write
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
