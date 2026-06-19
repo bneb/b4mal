@@ -1,5 +1,5 @@
 /**
- * B4mal v7.1.0 — Schema Layer
+ * B4mal Schema Layer
  *
  * Canonical task and config types. TaskConfig is the single source of truth
  * used by the orchestrator, executor, verifier, and config loader.

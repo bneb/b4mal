@@ -91,23 +91,23 @@ export class TerminalReporter {
      */
     renderHUD(taskCount: number, pipelineName: string): void {
         console.log();
-        console.log(`  ${BG_BLUE}${B}${HI_WHITE}  ▲ b4mal MISSION CONTROL v1.0  ${R}`);
+        console.log(`  ${BG_BLUE}${B}${HI_WHITE}  ▲ b4mal ${R}`);
         console.log(`  ${B}${HI_WHITE}${pipelineName}${R} ${D}(${taskCount} tasks)${R}`);
         console.log(`  ${line()}`);
     }
 
     /**
-     * Render the isolation metrics bar — tax recovered, efficiency, jitter.
+     * Render the cache summary bar.
      */
-    renderIsolationBar(tax: TaxReport): void {
-        const effPct = (tax.efficiencyRatio * 100).toFixed(1);
-        const bar = fmtBar(tax.efficiencyRatio);
+    renderCacheBar(report: TaxReport): void {
+        const effPct = (report.efficiencyRatio * 100).toFixed(1);
+        const bar = fmtBar(report.efficiencyRatio);
 
         console.log();
-        console.log(`  ${HI_CYAN}${B}ISOLATION METRICS${R}`);
-        console.log(`  ${CYAN}› TAX RECOVERED:${R}      ${HI_GREEN}${B}${fmtMs(tax.totalMsSaved)}${R} ${D}across ${tax.logicalHits} logical hit${tax.logicalHits !== 1 ? "s" : ""}${R}`);
-        console.log(`  ${CYAN}› EFFICIENCY:${R}         ${bar} ${HI_WHITE}${effPct}%${R}`);
-        console.log(`  ${CYAN}› I/O JITTER:${R}         ${tax.totalJitterMs > 10 ? HI_YELLOW : D}${fmtMs(tax.totalJitterMs)}${R}`);
+        console.log(`  ${HI_CYAN}${B}CACHE${R}`);
+        console.log(`  ${CYAN}› TIME SAVED:${R}     ${HI_GREEN}${B}${fmtMs(report.totalMsSaved)}${R} ${D}across ${report.logicalHits} AST hit${report.logicalHits !== 1 ? "s" : ""}${R}`);
+        console.log(`  ${CYAN}› EFFICIENCY:${R}     ${bar} ${HI_WHITE}${effPct}%${R}`);
+        console.log(`  ${CYAN}› I/O JITTER:${R}     ${report.totalJitterMs > 10 ? HI_YELLOW : D}${fmtMs(report.totalJitterMs)}${R}`);
     }
 
     /**
@@ -138,7 +138,7 @@ export class TerminalReporter {
         if (result.cacheHit === "content") {
             label = `${D}cached${R}`;
         } else if (result.cacheHit === "logic") {
-            label = `${HI_MAGENTA}logical hit${R}`;
+            label = `${HI_MAGENTA}AST hit${R}`;
         } else {
             label = fmtMs(result.durationMs);
         }
@@ -168,7 +168,7 @@ export class TerminalReporter {
         if (bottleneck.durationMs <= 0) return;
 
         console.log();
-        console.log(`  ${HI_RED}${B}[WARN] BOTTLENECK${R}`);
+        console.log(`  ${HI_RED}${B}[WARN] SLOW TASK${R}`);
         console.log(`  ${RED}› ${bottleneck.id}${R} ${D}(${fmtMs(bottleneck.durationMs)}, ${bottleneck.hitType})${R}`);
         if (bottleneck.ioWaitMs > 0) {
             console.log(`  ${D}  └ I/O wait: ${fmtMs(bottleneck.ioWaitMs)}${R}`);
@@ -233,7 +233,7 @@ export function reportTaskEnd(result: TaskResult): void {
     if (result.cacheHit === "content") {
         label = `${D}cached${R}`;
     } else if (result.cacheHit === "logic") {
-        label = `${HI_MAGENTA}logical hit${R}`;
+        label = `${HI_MAGENTA}AST hit${R}`;
     } else {
         label = fmtMs(result.durationMs);
     }

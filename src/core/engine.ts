@@ -88,7 +88,7 @@ export class B4malEngine {
             id: p.id,
             cmd: pkgScripts[p.id]
               ? [pkgScripts[p.id]]
-              : ["echo", `[TODO] Define command for ${p.id} in b4mal.config.json`],
+              : ["echo", `No package.json script found for '${p.id}'. Define its command in b4mal.config.json.`],
             claims: p.claims,
             deps: [],
             reads:  p.claims.filter(c => c.startsWith("fs:")).map(c => c.slice(3)),

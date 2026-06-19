@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// B4mal v5.0.0 — The Core CLI
+// B4mal CLI
 //
 // Commands:
 //   b4mal init     Discover source files and write b4mal.lock

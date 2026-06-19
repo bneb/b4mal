@@ -142,19 +142,19 @@ async function phase2_io_sizer(totalBytes: number): Promise<void> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Phase 3: FormalShadow Solver Compute
+// Phase 3: PrefixTree Collision Verification
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function phase3_solver_compute(): Promise<void> {
+async function phase3_verification(): Promise<void> {
     console.log(`\n${"═".repeat(60)}`);
-    console.log(`  PHASE 3: SOLVER COMPUTE (${SOLVER_CONCURRENCY}x PrefixTree)`);
+    console.log(`  PHASE 3: COLLISION DETECTION (${SOLVER_CONCURRENCY}x PrefixTree)`);
     console.log(`${"═".repeat(60)}`);
 
-    // Build a mix of SAT and UNSAT problems to stress both paths
+    // Build a mix of colliding and isolated task pairs to stress both paths
     const pairs: [TaskResourceClaim, TaskResourceClaim][] = [];
     for (let i = 0; i < SOLVER_CONCURRENCY; i++) {
         if (i % 2 === 0) {
-            // SAT: overlapping prefixes — forces the solver to find a witness
+            // COLLISION: overlapping prefixes — forces the verifier to detect conflict
             pairs.push([
                 {
                     id: `writer-${i}`,
@@ -172,7 +172,7 @@ async function phase3_solver_compute(): Promise<void> {
                 },
             ]);
         } else {
-            // UNSAT: completely disjoint — forces the solver to prove no overlap
+            // ISOLATED: completely disjoint — verifier proves no overlap
             pairs.push([
                 {
                     id: `builder-${i}`,
@@ -374,7 +374,7 @@ async function runCrucible() {
         await phase2_io_sizer(totalBytes);
 
         // Phase 3
-        await phase3_solver_compute();
+        await phase3_verification();
 
         // Phase 4
         await phase4_db_contention();
