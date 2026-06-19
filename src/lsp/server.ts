@@ -30,12 +30,34 @@ function tryReadMessage(state: LspState): string | null {
   return null;
 }
 
+// ─── Document state ──────────────────────────────────────────────────────
+
+let lastKnownTasks: string[] = [];
+
+function updateKnownTasks(text: string): void {
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed.tasks && typeof parsed.tasks === "object") {
+      lastKnownTasks = Object.keys(parsed.tasks);
+    }
+  } catch {
+    // Invalid JSON while typing — keep previous state
+  }
+}
+
 // ─── Completions ──────────────────────────────────────────────────────────
 
 function provideCompletions() {
+  const taskCompletions = lastKnownTasks.map(id => ({
+    label: `"${id}"`,
+    detail: "Existing task ID",
+    insertText: `"${id}"`,
+  }));
+
   return {
     isIncomplete: false,
     items: [
+      ...taskCompletions,
       { label: '"cmd"', detail: "Command array", insertText: '"cmd": ["$1"]' },
       { label: '"inputs"', detail: "Filesystem paths this task reads", insertText: '"inputs": ["$1"]' },
       { label: '"outputs"', detail: "Filesystem paths this task writes", insertText: '"outputs": ["$1"]' },
@@ -128,6 +150,7 @@ async function handleDidChange(msg: any): Promise<void> {
     ? msg.params.contentChanges[0].text
     : msg.params.textDocument.text;
   if (uri.endsWith("b4mal.lock") || uri.endsWith("b4mal.config.json")) {
+    updateKnownTasks(text);
     await validateDocument(uri, text);
   }
 }
