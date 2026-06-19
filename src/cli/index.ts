@@ -65,6 +65,7 @@ async function main() {
                 "from-config": { type: "boolean" },
                 "dry-run": { type: "boolean" },
                 strict: { type: "boolean" },
+                version: { type: "boolean", short: "v" },
                 chaos: { type: "boolean" },
                 help: { type: "boolean", short: "h", default: false },
             },
@@ -85,6 +86,12 @@ async function main() {
 
     // Bun.argv: [bun, script, command, ...rest]
     const command = positionals[2];
+
+    if (values.version) {
+        const pkg = JSON.parse(readFileSync(join(import.meta.dir, "../../package.json"), "utf-8"));
+        process.stdout.write(`${pkg.version}\n`);
+        process.exit(0);
+    }
 
     if (!command) {
         printUsage();
