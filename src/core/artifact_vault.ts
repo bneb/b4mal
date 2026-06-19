@@ -174,50 +174,23 @@ export class ArtifactVault {
             throw new Error(`Artifact archive not found for hash: ${logicHash}`);
         }
 
-        // Extract to a staging directory to prevent path traversal attacks
-        // from tampered archives (GNU tar can extract ../ paths without --no-absolute-names)
-        const os = require("os");
-        const fs = require("fs");
-        const path = require("path");
-        const stageDir = fs.mkdtempSync(path.join(os.tmpdir(), "b4mal-unpack-"));
+        const zstdProc = Bun.spawn(["zstd", "-d", archivePath, "--stdout"], {
+            stdout: "pipe",
+            stderr: "pipe",
+        });
 
-        try {
-          const zstdProc = Bun.spawn(["zstd", "-d", archivePath, "--stdout"], {
-              stdout: "pipe",
-              stderr: "pipe",
-          });
+        const tarProc = Bun.spawn(["tar", "-xf", "-", "-C", projectRoot, "--no-absolute-names"], {
+            stdin: zstdProc.stdout,
+            stdout: "pipe",
+            stderr: "pipe",
+        });
 
-          const tarProc = Bun.spawn(["tar", "-xf", "-", "-C", stageDir], {
-              stdin: zstdProc.stdout,
-              stdout: "pipe",
-              stderr: "pipe",
-          });
+        const [zstdExit, tarExit] = await Promise.all([zstdProc.exited, tarProc.exited]);
 
-            const [zstdExit, tarExit] = await Promise.all([zstdProc.exited, tarProc.exited]);
-
-          if (zstdExit !== 0 || tarExit !== 0) {
+        if (zstdExit !== 0 || tarExit !== 0) {
             const zstdErr = await new Response(zstdProc.stderr).text();
             const tarErr = await new Response(tarProc.stderr).text();
             throw new Error(`Unpack failed. zstd: ${zstdExit} (${zstdErr.trim()}), tar: ${tarExit} (${tarErr.trim()})`);
-          }
-
-          // Verify extracted paths are within projectRoot before copying
-          const resolvedRoot = fs.realpathSync(path.resolve(projectRoot));
-          const entries = fs.readdirSync(stageDir, { recursive: true });
-          for (const entry of entries) {
-            const srcPath = path.join(stageDir, entry);
-            const resolved = fs.realpathSync(srcPath);
-            if (!resolved.startsWith(resolvedRoot + path.sep) && resolved !== resolvedRoot) {
-              // Path outside project root — skip it (defense in depth)
-              continue;
-            }
-            const destPath = path.join(projectRoot, entry);
-            const destDir = path.dirname(destPath);
-            if (!existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
-            fs.renameSync(srcPath, destPath);
-          }
-        } finally {
-          fs.rmSync(stageDir, { recursive: true, force: true });
         }
     }
 
