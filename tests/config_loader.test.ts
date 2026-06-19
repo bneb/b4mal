@@ -463,3 +463,107 @@ describe("config_loader error paths", () => {
   });
 });
 
+// ─── Coverage: matrix expansion paths ─────────────────────────────────────
+
+describe("configToTasks matrix expansion", () => {
+  test("expands simple 2-axis matrix", () => {
+    const config = {
+      tasks: {
+        build: { cmd: ["make"], matrix: { os: ["linux", "macos"] } },
+      },
+    };
+    const tasks = configToTasks(config as any);
+    expect(tasks).toHaveLength(2);
+    expect(tasks.map((t: any) => t.id).sort()).toEqual(["build-os=linux", "build-os=macos"]);
+  });
+
+  test("injects MATRIX_ env vars", () => {
+    const config = {
+      tasks: {
+        build: { cmd: ["make"], matrix: { os: ["linux"] } },
+      },
+    };
+    const tasks = configToTasks(config as any);
+    expect(tasks[0].env.MATRIX_OS).toBe("linux");
+  });
+
+  test("rejects invalid axis name", () => {
+    const config = {
+      tasks: {
+        build: { cmd: ["make"], matrix: { "bad axis": ["x"] } },
+      },
+    };
+    expect(() => configToTasks(config as any)).toThrow(/invalid characters/i);
+  });
+
+  test("rejects empty axis values", () => {
+    const config = {
+      tasks: {
+        build: { cmd: ["make"], matrix: { os: [] } },
+      },
+    };
+    expect(() => configToTasks(config as any)).toThrow(/zero values/i);
+  });
+
+  test("rejects invalid matrix value", () => {
+    const config = {
+      tasks: {
+        build: { cmd: ["make"], matrix: { os: ["bad value!"] } },
+      },
+    };
+    expect(() => configToTasks(config as any)).toThrow(/invalid characters/i);
+  });
+
+  test("detects duplicate IDs after matrix expansion", () => {
+    const config = {
+      tasks: {
+        build: { cmd: ["make"], matrix: { os: ["linux"] } },
+        "build-os=linux": { cmd: ["other"] },
+      },
+    };
+    expect(() => configToTasks(config as any)).toThrow(/duplicate task id/i);
+  });
+
+  test("sorts matrix values deterministically", () => {
+    const config = {
+      tasks: {
+        build: { cmd: ["make"], matrix: { os: ["c", "a", "b"] } },
+      },
+    };
+    const tasks = configToTasks(config as any);
+    expect(tasks[0].id).toBe("build-os=a");
+    expect(tasks[1].id).toBe("build-os=b");
+    expect(tasks[2].id).toBe("build-os=c");
+  });
+});
+
+// ─── Coverage: engine plan() and build paths ──────────────────────────────
+
+describe("engine integration", () => {
+  let testDir: string;
+  beforeEach(() => { testDir = mkdtempSync(join(tmpdir(), "b4mal-eng-")); });
+  afterEach(() => { rmSync(testDir, { recursive: true, force: true }); });
+
+  test("plan() returns waves and conflicts for valid lockfile", async () => {
+    const { B4malEngine } = await import("../src/core/engine");
+    writeJson(join(testDir, "b4mal.lock"), {
+      version: 2,
+      tasks: [
+        { id: "a", cmd: ["echo", "a"], inputs: [], outputs: [], dependencies: [], claims: [], needsEnv: [], providesEnv: [], env: {}, timeout: 300000, cache: true },
+        { id: "b", cmd: ["echo", "b"], inputs: [], outputs: [], dependencies: ["a"], claims: [], needsEnv: [], providesEnv: [], env: {}, timeout: 300000, cache: true },
+      ],
+    });
+    const engine = new B4malEngine(testDir);
+    const plan = await engine.plan();
+    expect(plan.totalTasks).toBe(2);
+    expect(plan.waves.length).toBeGreaterThan(0);
+    expect(plan.conflicts).toHaveLength(0);
+  });
+
+  test("build() throws when lockfile is missing", async () => {
+    const { B4malEngine } = await import("../src/core/engine");
+    const engine = new B4malEngine(testDir);
+    await expect(engine.build()).rejects.toThrow(/No b4mal.lock found/);
+  });
+});
+
