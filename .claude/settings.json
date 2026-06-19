@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun test --reporter=dot tests/ 2>&1 | tail -1"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat << 'REPORT'\nQuality Gates:\n  Tests: $(bun test --reporter=dot tests/ 2>&1 | tail -1)\n  Coverage: $(bun test --coverage tests/ 2>&1 | grep 'All files' | awk '{print $3, $4}')\n  LOC/Nest/Params: $(bun run /tmp/measure_quality.ts 2>&1 | grep 'TOTAL VIOLATIONS')\nREPORT\n"
+          }
+        ]
+      }
+    ]
+  }
+}
