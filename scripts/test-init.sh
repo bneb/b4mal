@@ -1,15 +1,14 @@
 #!/bin/bash
 # Test b4mal init against open-source monorepos.
-# Usage: ./scripts/test-init.sh [b4mal-binary-path]
 set -e
-B4MAL="${1:-bun run src/cli/index.ts}"
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+B4MAL_BIN="${1:-$SCRIPT_DIR/src/cli/index.ts}"
 TMPDIR="${TMPDIR:-/tmp}/b4mal-init-test"
 PASS=0
 FAIL=0
 COUNT=0
 MAX=20
 
-# 20 well-known monorepos with package.json
 REPOS=(
   "colinhacks/zod"
   "vitest-dev/vitest"
@@ -40,7 +39,6 @@ for repo in "${REPOS[@]}"; do
   [ $COUNT -gt $MAX ] && break
   name=$(echo "$repo" | tr '/' '-')
   dir="$TMPDIR/$name"
-
   echo "=== [$COUNT/$MAX] $repo ==="
 
   if [ -d "$dir/.git" ]; then
@@ -53,10 +51,8 @@ for repo in "${REPOS[@]}"; do
     }
   fi
 
-  cd "$dir"
-
-  if $B4MAL init 2>/dev/null; then
-    if [ -f b4mal.config.json ] || [ -f b4mal.lock ]; then
+  if (cd "$dir" && bun run "$B4MAL_BIN" init 2>/dev/null); then
+    if [ -f "$dir/b4mal.config.json" ] || [ -f "$dir/b4mal.lock" ]; then
       echo "  PASS"
       PASS=$((PASS + 1))
     else
@@ -68,11 +64,11 @@ for repo in "${REPOS[@]}"; do
     FAIL=$((FAIL + 1))
   fi
 
-  rm -f b4mal.lock b4mal.config.json .b4mal 2>/dev/null
-  cd "$OLDPWD"
+  rm -f "$dir"/b4mal.lock "$dir"/b4mal.config.json 2>/dev/null
+  rm -rf "$dir/.b4mal" 2>/dev/null
 done
 
 echo ""
 echo "=== $PASS pass, $FAIL fail, $COUNT tested ==="
 rm -rf "$TMPDIR"
-[ $FAIL -eq 0 ] || exit 1
+[ $FAIL -eq 0 ]

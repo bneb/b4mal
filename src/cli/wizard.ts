@@ -37,17 +37,26 @@ export class MigrationWizard {
             }
 
             if (!detected) {
+                rl.close();
                 return null;
+            }
+
+            // Non-interactive mode (CI, scripts): auto-accept migration
+            if (!process.stdin.isTTY) {
+              rl.close();
+              return migrator();
             }
 
             console.log(`\nB4mal detected a legacy ${detected} configuration!`);
             const answer = await rl.question("Would you like to auto-migrate it into a highly-optimized b4mal.lock? (y/N): ");
-            
+
             if (answer.trim().toLowerCase() === "y") {
                 console.log(`\n[OK] Translating ${detected} configuration into B4mal tasks...`);
+                rl.close();
                 return migrator();
             } else {
                 console.log("\nSkipping migration. Falling back to native AST discovery.");
+                rl.close();
                 return null;
             }
         } finally {
