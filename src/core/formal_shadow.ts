@@ -17,7 +17,7 @@ export interface TaskResourceClaim {
     writes: string[];
     envReads: string[];
     envWrites: string[];
-    claims: string[];
+    claims?: string[];
 }
 
 export interface PairResult {
