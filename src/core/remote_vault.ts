@@ -58,9 +58,18 @@ function parseEmbeddedMetadata(data: Buffer): CacheMetadata | null {
 
 // ─── RemoteVault ───────────────────────────────────────────────────────────
 
+export interface L2Stats {
+  pushes: number;
+  pulls: number;
+  hits: number;
+  bytesUp: number;
+  bytesDown: number;
+}
+
 export class RemoteVault {
   private adapter: S3Adapter | null;
   lastPromoted: string | null = null;
+  stats: L2Stats = { pushes: 0, pulls: 0, hits: 0, bytesUp: 0, bytesDown: 0 };
 
   constructor(adapter: S3Adapter | null) {
     this.adapter = adapter;
@@ -103,6 +112,9 @@ export class RemoteVault {
       // Promote to L1: move the downloaded archive into the local vault
       this.promoteToL1(logicHash, tmpPath, projectRoot);
       this.lastPromoted = logicHash;
+      this.stats.hits++;
+      this.stats.pulls++;
+      try { this.stats.bytesDown += Bun.file(tmpPath).size; } catch {}
 
       return {
         hit: true,
@@ -141,6 +153,10 @@ export class RemoteVault {
       writeFileSync(tmpPath, new Uint8Array(archiveWithMeta));
 
       const result = await this.adapter.push(logicHash, tmpPath);
+      if (result) {
+        this.stats.pushes++;
+        try { this.stats.bytesUp += Bun.file(tmpPath).size; } catch {}
+      }
 
       // Clean up temp file
       try { unlinkSync(tmpPath); } catch {}
