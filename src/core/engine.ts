@@ -27,12 +27,19 @@ export interface BuildResult {
     results: WaveResult[];
 }
 
+export interface PlanResult {
+    waves: { depth: number; taskIds: string[] }[];
+    totalTasks: number;
+    conflicts: { taskA: string; taskB: string; resource: string }[];
+}
+
 export interface EngineOptions {
     force?: boolean;
     debug?: boolean;
     dbPath?: string;
     concurrency?: number;
     chaos?: boolean;
+    strict?: boolean;
 }
 
 // ─── Engine ──────────────────────────────────────────────────────────────────
@@ -167,6 +174,40 @@ export class B4malEngine {
       return {};
     }
 
+    /**
+     * Plan-only mode: read lockfile, plan DAG, verify collisions, but do NOT execute.
+     * Returns the plan that build() would use. No side effects.
+     */
+    async plan(): Promise<PlanResult> {
+      if (!existsSync(this.lockPath)) {
+        throw new Error(`No b4mal.lock found. Run 'b4mal init' first.`);
+      }
+      const raw = JSON.parse(readFileSync(this.lockPath, "utf-8"));
+      const lockTasks = this.normalizeLockTasks(raw);
+      const tasks: OrchestratorTask[] = lockTasks.map(t => ({
+        id: t.id, cmd: t.cmd,
+        claims: [...t.inputs.map((p: string) => `fs:${p}`), ...t.outputs.map((p: string) => `fs:${p}`), ...t.claims],
+        deps: t.dependencies, reads: t.inputs, writes: t.outputs, secrets: t.secrets, when: t.when,
+      }));
+      const dag = WavePlanner.planDAG(tasks);
+      const taskMap = new Map(lockTasks.map(t => [t.id, t]));
+      const conflicts: PlanResult["conflicts"] = [];
+      for (const wave of dag.waves) {
+        const claims = wave.taskIds.map(id => {
+          const t = taskMap.get(id);
+          if (!t) throw new Error(`Unknown task: ${id}`);
+          return { id: t.id, reads: t.inputs, writes: t.outputs, envReads: t.needsEnv, envWrites: t.providesEnv };
+        });
+        const result = await FormalShadow.verifyWave(claims);
+        if (!result.verified) {
+          for (const c of result.conflicts) {
+            conflicts.push({ taskA: c.taskA, taskB: c.taskB, resource: c.counterexample || "unknown" });
+          }
+        }
+      }
+      return { waves: dag.waves, totalTasks: lockTasks.length, conflicts };
+    }
+
     // ── build ─────────────────────────────────────────────────────────────────
 
     /**
@@ -239,12 +280,13 @@ export class B4malEngine {
         }
 
         if (allConflicts.length > 0) {
-            return {
-                success: false,
-                verified: false,
-                conflicts: allConflicts,
-                results: [],
-            };
+            if (this.options.strict) {
+              return { success: false, verified: false, conflicts: allConflicts, results: [] };
+            }
+            // Non-strict: warn but continue
+            for (const c of allConflicts) {
+              process.stderr.write(`\x1b[33m[WARN] Collision: ${c.taskA} ↔ ${c.taskB}: ${c.counterexample || "unknown"}\x1b[0m\n`);
+            }
         }
 
         // Step 3: Build remote vault from env (if configured)

@@ -63,6 +63,8 @@ async function main() {
                 concurrency: { type: "string", short: "c" },
                 sync: { type: "boolean" },
                 "from-config": { type: "boolean" },
+                "dry-run": { type: "boolean" },
+                strict: { type: "boolean" },
                 chaos: { type: "boolean" },
                 help: { type: "boolean", short: "h", default: false },
             },
@@ -160,7 +162,26 @@ async function main() {
                   }
                 }
 
-                const result = await engine.build({ force: values.force });
+                const dryRun = values["dry-run"];
+                const opts = { force: values.force, strict: values.strict };
+
+                if (dryRun) {
+                  const plan = await engine.plan();
+                  banner(`Dry Run — ${plan.waves.length} waves, ${plan.totalTasks} tasks`);
+                  for (const wave of plan.waves) {
+                    process.stdout.write(`\n  ${c.dim}wave ${wave.depth}${c.reset} ${c.dim}(${wave.taskIds.length} tasks)${c.reset}\n`);
+                    for (const id of wave.taskIds) process.stdout.write(`    ${id}\n`);
+                  }
+                  if (plan.conflicts.length > 0) {
+                    process.stdout.write(`\n  ${c.red}${plan.conflicts.length} collision(s) detected:${c.reset}\n`);
+                    for (const conflict of plan.conflicts) {
+                      process.stdout.write(`    ${c.red}${conflict.taskA} ↔ ${conflict.taskB}: ${conflict.resource}${c.reset}\n`);
+                    }
+                  }
+                  process.exit(0);
+                }
+
+                const result = await engine.build(opts);
 
                 if (!result.verified) {
                     fail("Resource Monitor rejected the build DAG due to resource collisions.");

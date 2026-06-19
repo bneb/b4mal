@@ -1,31 +1,31 @@
-name: B4mal CI
+name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [main]
   pull_request:
-    branches: [ "main" ]
+    branches: [main]
 
 jobs:
-  build:
-    name: B4mal Orchestrator
+  dogfood:
+    name: Dogfood (typecheck → test → build)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+      - uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
 
+      - run: bun install
 
-      - name: Install Dependencies
-        run: bun install
+      - name: Typecheck
+        run: bunx tsc --noEmit
 
-      - name: Full Test Suite
+      - name: Test
         run: bun test
 
-      - name: Execute Verified DAG
-        run: bun src/cli/index.ts build
+      - name: Build (dogfood)
+        run: bun run src/cli/index.ts build
