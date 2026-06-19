@@ -38,7 +38,7 @@ describe("reporter.ts", () => {
             expect(logSpy).toHaveBeenCalled();
         });
 
-        test("renderIsolationBar", () => {
+        test("renderCacheBar", () => {
             const reporter = new TerminalReporter();
             const tax: TaxReport = {
                 totalMsSaved: 1200,
@@ -46,10 +46,10 @@ describe("reporter.ts", () => {
                 totalJitterMs: 15,
                 efficiencyRatio: 0.85
             };
-            reporter.renderIsolationBar(tax);
+            reporter.renderCacheBar(tax);
             expect(logSpy).toHaveBeenCalled();
-            // test singular logical hit and low jitter
-            reporter.renderIsolationBar({
+            // test singular AST hit and low jitter
+            reporter.renderCacheBar({
                 totalMsSaved: 1,
                 logicalHits: 1,
                 totalJitterMs: 1,
