@@ -174,15 +174,29 @@ export class ArtifactVault {
             throw new Error(`Artifact archive not found for hash: ${logicHash}`);
         }
 
-        const zstdProc = Bun.spawn(["zstd", "-d", archivePath, "--stdout"], {
-            stdout: "pipe",
-            stderr: "pipe",
-        });
+        // List archive contents and verify no path traversal before extracting.
+        // macOS bsdtar extracts ../ entries by default; GNU tar >= 1.29 blocks them,
+        // but we verify explicitly for defense in depth across all platforms.
+        const listProc = Bun.spawn(
+            ["tar", "-tf", "-"],
+            { stdin: Bun.spawn(["zstd", "-d", archivePath, "--stdout"]).stdout, stdout: "pipe", stderr: "pipe" },
+        );
+        const listOutput = await new Response(listProc.stdout).text();
+        await listProc.exited;
 
+        const resolvedRoot = require("fs").realpathSync(require("path").resolve(projectRoot));
+        for (const entry of listOutput.trim().split("\n")) {
+          if (!entry) continue;
+          const normalized = entry.replace(/^\.\//, "");
+          if (normalized.startsWith("/") || normalized.includes("..")) {
+            throw new Error(`Unpack rejected: archive contains unsafe path "${entry}"`);
+          }
+        }
+
+        // Extract to projectRoot — paths were pre-validated above
+        const zstdProc = Bun.spawn(["zstd", "-d", archivePath, "--stdout"], { stdout: "pipe", stderr: "pipe" });
         const tarProc = Bun.spawn(["tar", "-xf", "-", "-C", projectRoot], {
-            stdin: zstdProc.stdout,
-            stdout: "pipe",
-            stderr: "pipe",
+            stdin: zstdProc.stdout, stdout: "pipe", stderr: "pipe",
         });
 
         const [zstdExit, tarExit] = await Promise.all([zstdProc.exited, tarProc.exited]);
