@@ -177,7 +177,7 @@ function buildTask(
     }
   }
 
-  return {
+  const task: TaskConfigWithId = {
     id,
     cmd: t.cmd ?? [],
     dependencies: sortedSet(t.dependencies ?? []),
@@ -192,6 +192,8 @@ function buildTask(
     cache: t.cache ?? true,
     when: t.when,
   };
+  if (t.cwd) task.cwd = (t.cwd as string).replace(/\\/g, "/");
+  return task;
 }
 
 // ─── writeLockfileAtomic ───────────────────────────────────────────────────
