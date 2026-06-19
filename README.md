@@ -57,7 +57,7 @@ The `trace` command intercepts `execve`, `openat`, and `clone` system calls via 
 - **Docker**: Requires the `--cap-add=SYS_PTRACE` flag to allow system call interception.
 - **macOS / Windows**: Native tracing is unsupported due to OS-level restrictions (SIP). Run the trace step inside a Linux container. 
 
-*Note: Once `b4mal.ts` is synthesized, the resulting DAG can be executed (`b4mal run`) natively on any OS.*
+*Note: Once `b4mal.ts` is synthesized, the resulting DAG can be executed (`b4mal build`) natively on any OS.*
 
 ## Documentation
 
