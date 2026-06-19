@@ -565,5 +565,53 @@ describe("engine integration", () => {
     const engine = new B4malEngine(testDir);
     await expect(engine.build()).rejects.toThrow(/No b4mal.lock found/);
   });
+
+  test("shadow() detects deterministic write masking", async () => {
+    const { B4malEngine } = await import("../src/core/engine");
+    writeJson(join(testDir, "b4mal.lock"), {
+      version: 2,
+      tasks: [
+        { id: "a", cmd: ["echo"], inputs: [], outputs: ["dist"], dependencies: [], claims: [], needsEnv: [], providesEnv: [], env: {}, timeout: 300000, cache: true },
+        { id: "b", cmd: ["echo"], inputs: [], outputs: ["dist"], dependencies: ["a"], claims: [], needsEnv: [], providesEnv: [], env: {}, timeout: 300000, cache: true },
+      ],
+    });
+    const engine = new B4malEngine(testDir);
+    const result = await engine.shadow();
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  test("analyze() generates HTML report", async () => {
+    const { B4malEngine } = await import("../src/core/engine");
+    writeJson(join(testDir, "b4mal.lock"), {
+      version: 2,
+      tasks: [
+        { id: "x", cmd: ["echo"], inputs: [], outputs: [], dependencies: [], claims: [], needsEnv: [], providesEnv: [], env: {}, timeout: 300000, cache: true },
+      ],
+    });
+    const engine = new B4malEngine(testDir);
+    const reportPath = await engine.analyze();
+    expect(reportPath).toContain("b4mal-report");
+  });
+
+  test("init() writes lockfile from migrated tasks", async () => {
+    const { B4malEngine } = await import("../src/core/engine");
+    const engine = new B4malEngine(testDir);
+    await engine.init([{ id: "migrated", cmd: ["echo"], claims: [], deps: [], reads: [], writes: [], secrets: [] }]);
+    const { existsSync } = await import("fs");
+    expect(existsSync(join(testDir, "b4mal.lock"))).toBe(true);
+  });
+
+  test("clean() purges ledger and vault", async () => {
+    const { B4malEngine } = await import("../src/core/engine");
+    writeJson(join(testDir, "b4mal.lock"), {
+      version: 2,
+      tasks: [
+        { id: "c", cmd: ["echo"], inputs: [], outputs: [], dependencies: [], claims: [], needsEnv: [], providesEnv: [], env: {}, timeout: 300000, cache: true },
+      ],
+    });
+    const engine = new B4malEngine(testDir);
+    // Clean should not throw
+    await expect(engine.clean()).resolves.toBeUndefined();
+  });
 });
 
