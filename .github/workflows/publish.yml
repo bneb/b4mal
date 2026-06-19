@@ -1,0 +1,77 @@
+name: Publish
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  binaries:
+    name: Build binaries (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: b4mal-linux-x64
+            compile-target: bun-linux-x64
+          - os: ubuntu-latest
+            target: b4mal-linux-arm64
+            compile-target: bun-linux-arm64
+          - os: macos-latest
+            target: b4mal-macos-x64
+            compile-target: bun-darwin-x64
+          - os: macos-latest
+            target: b4mal-macos-arm64
+            compile-target: bun-darwin-arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      - name: Compile binary
+        run: bun build --compile --target=${{ matrix.compile-target }} src/cli/index.ts --outfile dist/${{ matrix.target }}
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/${{ matrix.target }}
+
+  npm:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: binaries
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  release:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    needs: binaries
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: b4mal-*
+          path: dist/
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/b4mal-*
+          generate_release_notes: true
