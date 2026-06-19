@@ -29,3 +29,15 @@ jobs:
 
       - name: Build (dogfood)
         run: bun run src/cli/index.ts build
+
+  init-test:
+    name: Init test (20 repos)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      - run: bun install
+      - run: bash scripts/test-init.sh
