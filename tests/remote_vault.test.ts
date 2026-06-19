@@ -157,6 +157,69 @@ describe("graceful degradation (S3 errors)", () => {
   });
 });
 
+// ─── promoteToL1 ──────────────────────────────────────────────────────────
+
+describe("promoteToL1 (L2→L1 header stripping)", () => {
+  test("strips metadata header before storing in L1 vault", () => {
+    const { mkdtempSync, writeFileSync, rmSync, readFileSync } = require("fs");
+    const { join } = require("path");
+    const { tmpdir } = require("os");
+    const testDir = mkdtempSync(join(tmpdir(), "b4mal-promote-"));
+
+    try {
+      // Create a mock L2 archive with embedded metadata
+      const meta: CacheMetadata = { logicHash: "test123", taskId: "build", exitCode: 0, durationMs: 100, signature: null };
+      const zstdData = Buffer.from([0x28, 0xB5, 0x2F, 0xFD]); // zstd magic bytes
+      const archiveWithMeta = embedMetadata(zstdData, meta);
+
+      const tmpPath = join(testDir, "l2-pull-test.tar.zst");
+      writeFileSync(tmpPath, new Uint8Array(archiveWithMeta));
+
+      const vault = new RemoteVault(null);
+      const logicHash = "test123";
+
+      // Call promoteToL1 directly (private, accessible via any)
+      (vault as any).promoteToL1(logicHash, tmpPath, testDir);
+
+      // Verify L1 vault file exists and metadata header was stripped
+      const { ArtifactVault } = require("../src/core/artifact_vault");
+      const vaultPath = ArtifactVault.getArchivePath(logicHash, testDir);
+      const vaultContent = readFileSync(vaultPath);
+
+      // L1 vault should NOT have the metadata header — just raw zstd
+      // The header starts with a 4-byte LE length. Raw zstd starts with magic bytes.
+      expect(vaultContent[0]).toBe(0x28); // zstd magic byte 1
+      expect(vaultContent[1]).toBe(0xB5); // zstd magic byte 2
+    } finally {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+
+  test("promoteToL1 creates vault directory if missing", () => {
+    const { mkdtempSync, writeFileSync, rmSync, existsSync } = require("fs");
+    const { join } = require("path");
+    const { tmpdir } = require("os");
+    const testDir = mkdtempSync(join(tmpdir(), "b4mal-promote2-"));
+
+    try {
+      const vault = new RemoteVault(null);
+      const logicHash = "test456";
+      const tmpPath = join(testDir, "pull.tar.zst");
+      const zstdData = Buffer.from([0x28, 0xB5, 0x2F, 0xFD]);
+      writeFileSync(tmpPath, embedMetadata(zstdData, { logicHash, taskId: "t", exitCode: 0, durationMs: 0, signature: null }));
+
+      // promoteToL1 with a hash that doesn't have a vault dir yet
+      (vault as any).promoteToL1(logicHash, tmpPath, testDir);
+
+      const { ArtifactVault } = require("../src/core/artifact_vault");
+      const vaultPath = ArtifactVault.getArchivePath(logicHash, testDir);
+      expect(existsSync(vaultPath)).toBe(true);
+    } finally {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+});
+
 // ─── Roundtrip ────────────────────────────────────────────────────────────
 
 describe("embed/parse roundtrip", () => {

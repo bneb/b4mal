@@ -177,8 +177,15 @@ describe("cache key format", () => {
 describe("S3Adapter with mocked S3Client", () => {
   test("hasArtifact returns true when file exists", async () => {
     const adapter = new S3Adapter({ bucket: "t", region: "us-east-1", accessKeyId: "x", secretAccessKey: "x" });
-    spyOn(adapter as any, "fileExists").mockResolvedValue(true);
-    expect(await adapter.hasArtifact("abc")).toBe(true);
+    let receivedKey = "";
+    spyOn(adapter as any, "fileExists").mockImplementation(async (key: string) => {
+      receivedKey = key;
+      return true;
+    });
+    const result = await adapter.hasArtifact("abc123");
+    expect(result).toBe(true);
+    expect(receivedKey).toContain("abc123");
+    expect(receivedKey).toContain(".tar.zst");
   });
 
   test("push succeeds when file exists and write succeeds", async () => {
@@ -213,6 +220,42 @@ describe("S3Adapter with mocked S3Client", () => {
     spyOn(adapter as any, "s3Read").mockRejectedValue(new Error("NoSuchKey"));
     const result = await adapter.pull("abc", "/tmp/x");
     expect(result).toBe(false);
+  });
+
+  test("s3Write retries on first failure then succeeds", async () => {
+    const adapter = new S3Adapter({ bucket: "t", region: "us-east-1", accessKeyId: "x", secretAccessKey: "x", retries: 3 });
+    let calls = 0;
+    adapter["client"].write = async (_key: string, _file: any) => {
+      calls++;
+      if (calls === 1) throw new Error("transient error");
+    };
+    await (adapter as any).s3Write("key", {});
+    expect(calls).toBe(2); // Failed once, succeeded on retry
+  });
+
+  test("s3Write throws after exhausting retries", async () => {
+    const adapter = new S3Adapter({ bucket: "t", region: "us-east-1", accessKeyId: "x", secretAccessKey: "x", retries: 2 });
+    adapter["client"].write = async () => { throw new Error("persistent error"); };
+    await expect((adapter as any).s3Write("key", {})).rejects.toThrow("persistent error");
+  });
+
+  test("s3Read retries on failure", async () => {
+    const adapter = new S3Adapter({ bucket: "t", region: "us-east-1", accessKeyId: "x", secretAccessKey: "x", retries: 3 });
+    let calls = 0;
+    adapter["client"].file = (_key: string) => ({
+      exists: async () => { calls++; if (calls <= 1) throw new Error("transient"); return true; },
+      arrayBuffer: async () => Buffer.from("data"),
+    });
+    const result = await (adapter as any).s3Read("key");
+    expect(result).toBeDefined();
+    expect(calls).toBeGreaterThan(1);
+  });
+
+  test("delay resolves after specified ms", async () => {
+    const adapter = new S3Adapter({ bucket: "t", region: "us-east-1", accessKeyId: "x", secretAccessKey: "x" });
+    const start = Date.now();
+    await (adapter as any).delay(10);
+    expect(Date.now() - start).toBeGreaterThanOrEqual(5);
   });
 
   test("validate returns true on successful probe", async () => {
