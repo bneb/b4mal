@@ -179,7 +179,7 @@ export class ArtifactVault {
             stderr: "pipe",
         });
 
-        const tarProc = Bun.spawn(["tar", "-xf", "-", "-C", projectRoot, "--no-absolute-names"], {
+        const tarProc = Bun.spawn(["tar", "-xf", "-", "-C", projectRoot], {
             stdin: zstdProc.stdout,
             stdout: "pipe",
             stderr: "pipe",
