@@ -196,7 +196,7 @@ export class B4malEngine {
         const claims = wave.taskIds.map(id => {
           const t = taskMap.get(id);
           if (!t) throw new Error(`Unknown task: ${id}`);
-          return { id: t.id, reads: t.inputs, writes: t.outputs, envReads: t.needsEnv, envWrites: t.providesEnv };
+          return { id: t.id, reads: t.inputs, writes: t.outputs, envReads: t.needsEnv, envWrites: t.providesEnv, claims: t.claims };
         });
         const result = await FormalShadow.verifyWave(claims);
         if (!result.verified) {
@@ -270,6 +270,7 @@ export class B4malEngine {
                     writes: t.outputs,
                     envReads: t.needsEnv,
                     envWrites: t.providesEnv,
+                    claims: t.claims,
                 };
             });
 

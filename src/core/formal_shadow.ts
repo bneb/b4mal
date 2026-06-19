@@ -17,6 +17,7 @@ export interface TaskResourceClaim {
     writes: string[];
     envReads: string[];
     envWrites: string[];
+    claims: string[];
 }
 
 export interface PairResult {
@@ -130,6 +131,19 @@ export class FormalShadow {
             checkAndAdd(task.writes.map(w => `fs:${w}`), "write");
             checkAndAdd(task.envReads.map(r => `env:${r}`), "read");
             checkAndAdd(task.envWrites.map(w => `env:${w}`), "write");
+
+            // Exact-match resources (port, db, etc.): two tasks claiming same resource
+            // with at least one writer = collision. Not hierarchical like fs paths.
+            for (const claim of (task.claims || [])) {
+              const prefix = claim.split(":")[0];
+              if (prefix === "fs" || prefix === "env") continue; // handled above
+              for (const other of wave) {
+                if (other.id === task.id) continue;
+                if ((other.claims || []).includes(claim)) {
+                  addConflict(task.id, other.id, claim);
+                }
+              }
+            }
         }
 
         for (const conflict of conflicts) {

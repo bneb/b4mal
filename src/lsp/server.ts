@@ -95,6 +95,7 @@ async function validateDocument(uri: string, text: string): Promise<void> {
       writes: t.writes || [],
       envReads: t.envReads || [],
       envWrites: t.envWrites || [],
+      claims: t.claims || [],
     }));
     const result = await FormalShadow.verifyWave(tasks);
     const diagnostics = result.conflicts.map((conflict: any) => ({
