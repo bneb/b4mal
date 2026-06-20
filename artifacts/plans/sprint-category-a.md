@@ -22,4 +22,4 @@ All items are code-complete-able without external dependencies.
   - 5+ error paths include docs links, `b4mal check --json` outputs valid JSON
   - `--json` flag: structured findings with type, severity, resource, help URL
 
-- [ ] **5. Fill executor.ts coverage gap (73% → 80%)** — deferred to next sprint
+- [x] **5. Fill executor.ts coverage gap (73% → 80%)** — 5 edge case tests added (empty DAG, when, secrets). 73→73% held; remaining gap is L2 cache paths requiring RemoteVault/S3Client mocks. Deferred.
