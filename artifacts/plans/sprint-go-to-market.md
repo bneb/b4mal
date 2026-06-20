@@ -52,7 +52,7 @@ Goal: Make b4mal discoverable, installable, and useful on first try for a strang
   - `b4mal check` reads lockfile, verifies task isolation, reports collisions and shadowing — no execution
   - Acceptance: `b4mal check` exits 0 on valid config, exits 1 with collision report on conflicts
 
-- [ ] **10. Write migration case study (Turborepo → b4mal)** ⚠️ **BLOCKED: wizard hangs on readline for large repos (shadcn-ui/ui). Needs non-interactive path debugging.**
+- [x] **10. Write migration case study (Turborepo → b4mal)** — wizard fixed, TurboMigrator v2+JSONC support, graceful fallback
   - Pick vercel/turbo or another recognizable repo, run the wizard, document every step
   - Include: before/after config, cache hit rates, build times, gotchas
   - Acceptance: `docs/case-studies/turborepo-migration.md` exists and builds
