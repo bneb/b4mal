@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="140" height="20" role="img" aria-label="Built with b4mal">
+  <title>Built with b4mal</title>
+  <rect width="90" height="20" fill="#555"/>
+  <rect x="90" width="50" height="20" fill="#7b61ff"/>
+  <rect width="140" height="20" fill="url(#a)" rx="2"/>
+  <text x="45" y="14" fill="#fff" font-family="system-ui,-apple-system,sans-serif" font-size="10" font-weight="500" text-anchor="middle">Built with</text>
+  <text x="115" y="14" fill="#fff" font-family="system-ui,-apple-system,sans-serif" font-size="10" font-weight="600" text-anchor="middle">b4mal</text>
+</svg>

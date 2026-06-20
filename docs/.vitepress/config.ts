@@ -19,6 +19,7 @@ export default defineConfig({
         { text: "Getting Started", link: "/guide/getting-started" },
         { text: "Installation", link: "/guide/installation" },
         { text: "Configuration", link: "/guide/configuration" },
+        { text: "vs. Turborepo", link: "/guide/vs-turborepo" },
         { text: "Migration", items: [
           { text: "From Turborepo", link: "/guide/migration/turborepo" },
           { text: "From Nx", link: "/guide/migration/nx" },
@@ -29,6 +30,7 @@ export default defineConfig({
         { text: "Determinism", link: "/concepts/determinism" },
         { text: "Resource Isolation", link: "/concepts/resource-isolation" },
         { text: "Caching", link: "/concepts/caching" },
+        { text: "Security Model", link: "/concepts/security-model" },
       ],
       "/reference/": [
         { text: "CLI Commands", link: "/reference/cli" },

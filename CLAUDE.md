@@ -5,13 +5,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
+# Development
 bun test                          # Full test suite (~70 files, 565 tests)
 bun test tests/config_schema.test.ts   # Run a single test file
 bun test --reporter=dot tests/    # Compact output for regression check
 bunx tsc --noEmit                 # Type-check without emitting (required by CI)
+
+# Build & run
+bun run build                     # Compile CLI to dist/index.js (bun build --target bun)
 bun run src/cli/index.ts build    # Self-hosted build (reads b4mal.lock)
 bun run src/cli/index.ts demo     # Run the interactive collision-detection demo
 bun run src/cli/index.ts init     # Auto-discover project structure, write b4mal.lock
+
+# Docs
+bun run docs:dev                  # Start vitepress dev server
+bun run docs:build                # Build static docs site
+bun run docs:preview              # Preview built docs site
+
+# Publishing
+bun publish                       # Publish to npm (runs build + test first)
+bun run scripts/benchmark-init.ts # Test init against 33 real repos (scores GREEN/YELLOW/RED)
+
+# Sprint tracking
+# Active sprint: artifacts/plans/sprint-go-to-market.md
 ```
 
 The project uses **Bun** as both runtime and package manager. `bun build` compiles TypeScript to `dist/`. There is no `npm`, no `node`, and no separate bundler.
