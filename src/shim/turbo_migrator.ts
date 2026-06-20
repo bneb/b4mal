@@ -17,10 +17,24 @@ export class TurboMigrator {
         }
 
         const rawConfig = readFileSync(turboJsonPath, "utf-8");
-        const config = JSON.parse(rawConfig); // Strictly JSON.parse, no execution
+        // Turborepo configs sometimes use JSON-with-comments (JSONC).
+        // Try strict parse first; if it fails, strip comments and retry.
+        // Only strip // on lines where it appears before any " (avoids
+        // matching // inside string values like "//#quality").
+        let config: any;
+        try {
+            config = JSON.parse(rawConfig);
+        } catch {
+            const sansComments = rawConfig
+                .replace(/\/\*[\s\S]*?\*\//g, "")           // block comments
+                .replace(/^\s*\/\/.*$/gm, "");              // full-line comments only
+            config = JSON.parse(sansComments);
+        }
         
+        // Turborepo v1 used "pipeline", v2+ uses "tasks"
+        const pipeline = config.tasks || config.pipeline || {};
         const tasks = [];
-        for (const [taskId, def] of Object.entries(config.pipeline || {})) {
+        for (const [taskId, def] of Object.entries(pipeline)) {
             tasks.push({
                 id: taskId,
                 cmd: ["npm", "run", taskId],

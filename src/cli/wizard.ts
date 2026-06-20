@@ -41,10 +41,18 @@ export class MigrationWizard {
                 return null;
             }
 
-            // Non-interactive mode (CI, scripts): auto-accept migration
-            if (!process.stdin.isTTY) {
+            // Non-interactive mode (CI, piped stdin): auto-accept migration.
+            // isTTY is false/undefined when stdin is a pipe; CI vars cover
+            // spawn-based runners (Bun.spawn, GitHub Actions, Docker).
+            const isCi = process.env.CI || process.env.GITHUB_ACTIONS || process.env.GITLAB_CI;
+            if (!process.stdin.isTTY || isCi) {
               rl.close();
-              return migrator();
+              try {
+                return migrator();
+              } catch (e: any) {
+                console.log(`   Migration failed: ${e.message}. Falling back to AST discovery.`);
+                return null;
+              }
             }
 
             console.log(`\nB4mal detected a legacy ${detected} configuration!`);
