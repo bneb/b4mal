@@ -36,10 +36,10 @@ b4mal.lock  ──[engine.normalizeLockTasks]──>  TaskConfigWithId[]  ──
                                                                               DynamicExecutor.run()
                                                                                             │
                                                                               ┌── L1 cache check (SQLiteLedger + ArtifactVault)
-                                                                              ├── L2 cache check (RemoteVault → S3Adapter) [NOT YET WIRED]
+                                                                              ├── L2 cache check (RemoteVault → S3Adapter)
                                                                               ├── Execute (Bun.spawn with EnvSanitizer)
                                                                               ├── L1 pack (tar.zst via ArtifactVault.pack)
-                                                                              └── L2 push (RemoteVault.pushWithMetadata) [NOT YET WIRED]
+                                                                              └── L2 push (RemoteVault.pushWithMetadata)
 ```
 
 ### The single engine
