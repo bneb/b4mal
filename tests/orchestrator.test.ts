@@ -150,6 +150,94 @@ describe("WaveExecutor - Non-blocking Execution", () => {
     });
 });
 
+// ─── Wave Executor — Edge Cases ────────────────────────────────────────────
+
+describe("WaveExecutor - Edge Cases", () => {
+    test("empty DAG returns immediately with empty results", async () => {
+        const dag = WavePlanner.planDAG([]);
+        const results = await DynamicExecutor.run(dag);
+        expect(results).toEqual([]);
+    });
+
+    test("when.platform mismatch skips the task", async () => {
+        const tasks: OrchestratorTask[] = [
+            { id: "linux-only", cmd: ["echo", "nope"], claims: [], deps: [],
+              when: { platform: ["linux"] } },
+        ];
+        const dag = WavePlanner.planDAG(tasks);
+        const results = await DynamicExecutor.run(dag);
+        expect(results.length).toBe(1);
+        if (process.platform === "linux") {
+            // On Linux, it runs normally
+            expect(results[0].exitCode).toBe(0);
+        } else {
+            // On macOS/Windows, it's skipped
+            expect(results[0].stdout).toContain("skipped");
+            expect(results[0].cached).toBe(true);
+        }
+    });
+
+    test("when.branch mismatch skips the task", async () => {
+        // Set a branch env var that won't match the required branch
+        process.env.GIT_BRANCH = "feature/test";
+        const tasks: OrchestratorTask[] = [
+            { id: "main-only", cmd: ["echo", "nope"], claims: [], deps: [],
+              when: { branch: "main" } },
+        ];
+        const dag = WavePlanner.planDAG(tasks);
+        const results = await DynamicExecutor.run(dag);
+
+        expect(results.length).toBe(1);
+        expect(results[0].stdout).toContain("skipped");
+        expect(results[0].stdout).toContain("feature/test");
+        delete process.env.GIT_BRANCH;
+    });
+
+    test("when.branch with glob pattern matches correctly", async () => {
+        process.env.GIT_BRANCH = "feature/build-fix";
+        const tasks: OrchestratorTask[] = [
+            { id: "feature-builds", cmd: ["echo", "run"], claims: [], deps: [],
+              when: { branch: "feature/*" } },
+        ];
+        const dag = WavePlanner.planDAG(tasks);
+        const results = await DynamicExecutor.run(dag);
+
+        expect(results.length).toBe(1);
+        expect(results[0].exitCode).toBe(0);
+        expect(results[0].stdout).toContain("run");
+        delete process.env.GIT_BRANCH;
+    });
+
+    test("secrets are injected into task environment", async () => {
+        process.env.MY_SECRET = "s3cret-value";
+        const tasks: OrchestratorTask[] = [
+            { id: "secret-task", cmd: ["sh", "-c", "echo $MY_SECRET"], claims: [], deps: [],
+              secrets: ["MY_SECRET"] },
+        ];
+        const dag = WavePlanner.planDAG(tasks);
+        const results = await DynamicExecutor.run(dag);
+
+        expect(results.length).toBe(1);
+        expect(results[0].stdout).toContain("s3cret-value");
+        delete process.env.MY_SECRET;
+    });
+
+    test("executor catch handler surfaces spawn errors as results", async () => {
+        // Use a relative path that Bun.spawn will reject synchronously
+        // because the binary doesn't exist in PATH.
+        const tasks: OrchestratorTask[] = [
+            { id: "bad", cmd: ["this-command-shouldnt-exist-anywhere-xyzzy"], claims: [], deps: [] },
+        ];
+        const dag = WavePlanner.planDAG(tasks);
+        const results = await DynamicExecutor.run(dag);
+
+        expect(results.length).toBe(1);
+        // Bun.spawn with missing binary returns exitCode != 0 on some
+        // platforms, or may reject. Either way we get a result.
+        expect(results[0].taskId || results[0].id).toBeDefined();
+    });
+});
+
 
 
 // ─── HUD Integration ─────────────────────────────────────────────────────────
