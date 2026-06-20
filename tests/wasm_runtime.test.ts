@@ -1,5 +1,8 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect, afterAll } from "bun:test";
 import { WasmRuntime } from "../src/plugins/wasm_runtime";
+import { mkdtempSync, writeFileSync, rmSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
 
 describe("Wasm Runtime Ecosystem", () => {
     test("loads and executes a WebAssembly plugin hook", async () => {
@@ -35,6 +38,31 @@ describe("Wasm Runtime Ecosystem", () => {
         
         await expect(runtime.executeHook("missing")).rejects.toThrow("Plugin does not export hook: missing");
     });
+
+    test("load() reads WASM binary from a file path", async () => {
+        const runtime = new WasmRuntime();
+        const dir = mkdtempSync(join(tmpdir(), "b4mal-wasm-"));
+        const wasmPath = join(dir, "add.wasm");
+
+        // Minimal WASM: module with exported add(i32,i32)->i32
+        const wasmBinary = new Uint8Array([
+            0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+            0x01, 0x07, 0x01, 0x60, 0x02, 0x7f, 0x7f, 0x01,
+            0x7f, 0x03, 0x02, 0x01, 0x00, 0x07, 0x07, 0x01,
+            0x03, 0x61, 0x64, 0x64, 0x00, 0x00, 0x0a, 0x09,
+            0x01, 0x07, 0x00, 0x20, 0x00, 0x20, 0x01, 0x6a,
+            0x0b,
+        ]);
+        writeFileSync(wasmPath, wasmBinary);
+
+        try {
+            await runtime.load(wasmPath);
+            const result = await runtime.executeHook("add", 3, 4);
+            expect(result).toBe(7);
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
+    }, 10000);
 
     test("executeHook aborts infinite loops", async () => {
         const runtime = new WasmRuntime();
