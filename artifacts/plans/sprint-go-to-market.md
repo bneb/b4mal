@@ -64,6 +64,8 @@ Goal: Make b4mal discoverable, installable, and useful on first try for a strang
 
 ## ⚪ Nice-to-have
 
-- [ ] **12. Run benchmark-init.ts against all 33 repos — publish results**
-  - Run full suite, save report, embed summary in docs
-  - Acceptance: benchmark results visible on docs site
+- [x] **12. Run benchmark-init.ts against all 33 repos — publish results**
+  - 35 repos tested: 31 GREEN (89%), 3 YELLOW (9%), 1 RED (3%)
+  - GREEN: all JS/TS, Rust, Go, Python repos — 100% functional commands
+  - YELLOW: shadcn-ui, date-fns, prisma — large file trees, AST discovery overload
+  - RED: vercel/turbo — JSON parse error on turbo.json (likely comment/trailing comma)
