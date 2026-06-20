@@ -1,18 +1,25 @@
 {
   "name": "b4mal",
-  "version": "7.0.0",
-  "description": "Core CI Orchestrator",
+  "version": "0.1.0",
+  "description": "Verified monorepo build orchestrator — formal resource-conflict detection, deterministic caching, and DAG execution",
   "type": "module",
   "bin": {
-    "b4mal": "./src/cli/index.ts"
+    "b4mal": "./dist/index.js"
   },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "bun run src/cli/index.ts",
+    "build": "bun build src/cli/index.ts --outdir dist --target bun",
     "test": "bun test",
     "bench": "bun run benchmarks/cold-start.ts && bun run benchmarks/parallel-overhead.ts",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "docs:preview": "vitepress preview docs",
+    "prepublishOnly": "bun run build && bun test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
