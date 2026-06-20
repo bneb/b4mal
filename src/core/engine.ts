@@ -8,6 +8,9 @@ import { homedir } from "os";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { ImportTracer } from "../discovery/graph";
 import { ClusterEngine } from "../discovery/auto_map";
+import { CargoIngester } from "../discovery/cargo_ingester";
+import { GoIngester } from "../discovery/go_ingester";
+import { PythonIngester } from "../discovery/python_ingester";
 import { WavePlanner } from "../orchestrator/planner";
 import { DynamicExecutor, type WaveResult } from "../orchestrator/executor";
 import { FormalShadow } from "../core/formal_shadow";
@@ -70,9 +73,15 @@ export class B4malEngine {
     // ── init ──────────────────────────────────────────────────────────────────
 
     /**
-     * Discover source files, run Tarjan's SCC via ClusterEngine, and
-     * write the resulting aperture proposals to b4mal.lock as an array
-     * of OrchestratorTask descriptors.
+     * Discover the project structure and write b4mal.lock.
+     *
+     * Routing logic:
+     *  1. If migrated tasks are provided (from wizard), write them directly.
+     *  2. If package.json exists → JS/TS path: ImportTracer + ClusterEngine +
+     *     package.json script matching.
+     *  3. If Cargo.toml / go.mod / pyproject.toml exists → language-specific
+     *     ingester path (well-known build/test/lint commands).
+     *  4. Otherwise → fall back to AST discovery with informational placeholders.
      */
     async init(migratedTasks?: OrchestratorTask[]): Promise<void> {
         if (migratedTasks && migratedTasks.length > 0) {
@@ -80,22 +89,64 @@ export class B4malEngine {
             return;
         }
 
+        const hasPkg = existsSync(join(this.projectRoot, "package.json"));
+
+        // ── JS/TS ecosystem (package.json present) ──────────────────────
+        if (hasPkg) {
+            const tracer = new ImportTracer();
+            const graph = await tracer.trace(this.projectRoot);
+            const clusterEngine = new ClusterEngine();
+            const proposals = clusterEngine.analyze(graph);
+            const pkgScripts = this.readPackageScripts();
+
+            const tasks: OrchestratorTask[] = proposals.map(p => ({
+                id: p.id,
+                cmd: pkgScripts[p.id]
+                  ? [pkgScripts[p.id]]
+                  : ["echo", `No command found for '${p.id}'. Define it in b4mal.config.json.`],
+                claims: p.claims,
+                deps: [],
+                reads:  p.claims.filter(c => c.startsWith("fs:")).map(c => c.slice(3)),
+                writes: p.type === "isolated" || p.type === "combined"
+                    ? p.claims.filter(c => c.startsWith("fs:")).map(c => c.slice(3))
+                    : [],
+                envReads: [],
+                envWrites: [],
+            }));
+
+            writeFileSync(this.lockPath, JSON.stringify(tasks, null, 2), "utf-8");
+            return;
+        }
+
+        // ── Non-JS ecosystems: language-specific ingesters ──────────────
+        for (const Ingester of [CargoIngester, GoIngester, PythonIngester]) {
+            const ingester = new Ingester();
+            const pipeline = ingester.ingest(this.projectRoot);
+            if (pipeline) {
+                const tasks: OrchestratorTask[] = pipeline.tasks.map(t => ({
+                    id: t.id,
+                    cmd: t.cmd,
+                    deps: t.dependencies,
+                    reads: [],
+                    writes: [],
+                    claims: [],
+                    envReads: [],
+                    envWrites: [],
+                }));
+                writeFileSync(this.lockPath, JSON.stringify(tasks, null, 2), "utf-8");
+                return;
+            }
+        }
+
+        // ── Unknown project type: AST discovery with placeholders ───────
         const tracer = new ImportTracer();
         const graph = await tracer.trace(this.projectRoot);
         const clusterEngine = new ClusterEngine();
         const proposals = clusterEngine.analyze(graph);
 
-        // Try to infer real commands from package.json scripts
-        const pkgScripts = this.readPackageScripts();
-
-        // Convert ApertureProposals → OrchestratorTask[] for the lockfile.
-        // When a task id matches a package.json script name, use that script
-        // as the command instead of a placeholder echo.
         const tasks: OrchestratorTask[] = proposals.map(p => ({
             id: p.id,
-            cmd: pkgScripts[p.id]
-              ? [pkgScripts[p.id]]
-              : ["echo", `No package.json script found for '${p.id}'. Define its command in b4mal.config.json.`],
+            cmd: ["echo", `No command found for '${p.id}'. Define it in b4mal.config.json.`],
             claims: p.claims,
             deps: [],
             reads:  p.claims.filter(c => c.startsWith("fs:")).map(c => c.slice(3)),
