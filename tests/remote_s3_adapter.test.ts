@@ -225,9 +225,10 @@ describe("S3Adapter with mocked S3Client", () => {
   test("s3Write retries on first failure then succeeds", async () => {
     const adapter = new S3Adapter({ bucket: "t", region: "us-east-1", accessKeyId: "x", secretAccessKey: "x", retries: 3 });
     let calls = 0;
-    adapter["client"].write = async (_key: string, _file: any) => {
+    adapter["client"].write = async (_key: string, _file: any): Promise<number> => {
       calls++;
       if (calls === 1) throw new Error("transient error");
+      return 0;
     };
     await (adapter as any).s3Write("key", {});
     expect(calls).toBe(2); // Failed once, succeeded on retry
@@ -245,7 +246,7 @@ describe("S3Adapter with mocked S3Client", () => {
     adapter["client"].file = (_key: string) => ({
       exists: async () => { calls++; if (calls <= 1) throw new Error("transient"); return true; },
       arrayBuffer: async () => Buffer.from("data"),
-    });
+    }) as any;
     const result = await (adapter as any).s3Read("key");
     expect(result).toBeDefined();
     expect(calls).toBeGreaterThan(1);
