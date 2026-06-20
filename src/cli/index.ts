@@ -67,6 +67,7 @@ async function main() {
                 strict: { type: "boolean" },
                 version: { type: "boolean", short: "v" },
                 chaos: { type: "boolean" },
+                json: { type: "boolean" },
                 help: { type: "boolean", short: "h", default: false },
             },
             strict: true,
@@ -256,38 +257,82 @@ async function main() {
 
             // ── check ────────────────────────────────────────────────────────
             case "check": {
-                banner("Verifying DAG Correctness…");
-                info("Checking resource isolation and shadowing without executing tasks.");
+                const jsonMode = values.json;
+                const isGHA = process.env.GITHUB_ACTIONS === "true";
+
+                if (!jsonMode) {
+                    banner("Verifying DAG Correctness…");
+                    info("Checking resource isolation and shadowing without executing tasks.");
+                }
 
                 const plan = await engine.plan();
                 let issues = plan.conflicts.length;
-                if (issues > 0) {
-                    warn(`${issues} resource collision(s) detected:`);
-                    for (const conflict of plan.conflicts) {
-                        process.stdout.write(
-                            `   ${c.red}Collision${c.reset}: ${c.bold}${conflict.taskA}${c.reset} ↔ ${c.bold}${conflict.taskB}${c.reset} on ${c.dim}${conflict.resource}${c.reset}\n`
-                        );
-                    }
+                const findings: any[] = [];
+
+                for (const conflict of plan.conflicts) {
+                    findings.push({
+                        type: "collision",
+                        severity: "error",
+                        taskA: conflict.taskA,
+                        taskB: conflict.taskB,
+                        resource: conflict.resource,
+                        message: `Collision: ${conflict.taskA} ↔ ${conflict.taskB} on ${conflict.resource}`,
+                        help: "https://b4mal.dev/concepts/resource-isolation",
+                    });
                 }
 
                 const shadows = await engine.shadow();
                 issues += shadows.length;
-                if (shadows.length > 0) {
-                    warn(`${shadows.length} shadowing event(s) detected:`);
-                    for (const s of shadows) {
-                        process.stdout.write(
-                            `   ${c.yellow}Shadow${c.reset}: ${c.bold}${s.taskB}${c.reset} masks ${c.bold}${s.taskA}${c.reset} on ${c.dim}${s.counterexample}${c.reset}\n`
-                        );
+                for (const s of shadows) {
+                    findings.push({
+                        type: "shadow",
+                        severity: "warning",
+                        upstream: s.taskA,
+                        downstream: s.taskB,
+                        resource: s.counterexample,
+                        message: `Shadow: ${s.taskB} masks ${s.taskA} on ${s.counterexample}`,
+                        help: "https://b4mal.dev/concepts/resource-isolation#shadowing-detection",
+                    });
+                }
+
+                if (jsonMode) {
+                    process.stdout.write(JSON.stringify({
+                        verified: issues === 0,
+                        collisions: plan.conflicts.length,
+                        shadows: shadows.length,
+                        findings,
+                    }, null, 2) + "\n");
+                } else if (isGHA) {
+                    // GitHub Actions workflow commands for PR annotations
+                    for (const f of findings) {
+                        const cmd = f.severity === "error" ? "error" : "warning";
+                        process.stdout.write(`::${cmd}::${f.message}\n`);
+                    }
+                    if (issues === 0) {
+                        process.stdout.write(`::notice::DAG verified — no collisions, no shadowing.\n`);
+                    }
+                } else {
+                    for (const f of findings) {
+                        if (f.type === "collision") {
+                            process.stdout.write(
+                                `   ${c.red}Collision${c.reset}: ${c.bold}${f.taskA}${c.reset} ↔ ${c.bold}${f.taskB}${c.reset} on ${c.dim}${f.resource}${c.reset}\n`
+                            );
+                        } else {
+                            process.stdout.write(
+                                `   ${c.yellow}Shadow${c.reset}: ${c.bold}${f.downstream}${c.reset} masks ${c.bold}${f.upstream}${c.reset} on ${c.dim}${f.resource}${c.reset}\n`
+                            );
+                        }
+                    }
+                    if (issues === 0) {
+                        ok("DAG verified — no collisions, no shadowing.");
+                    } else {
+                        process.stdout.write(`\n   ${c.red}${issues} issue(s) found.${c.reset}\n`);
+                        process.stdout.write(`   ${c.dim}Docs: https://b4mal.dev/concepts/resource-isolation${c.reset}\n`);
+                        process.stdout.write(`   ${c.dim}Run 'b4mal build' to execute after fixing the above.${c.reset}\n\n`);
                     }
                 }
 
-                if (issues === 0) {
-                    ok("DAG verified — no collisions, no shadowing.");
-                } else {
-                    process.stdout.write(`\n   ${c.red}${issues} issue(s) found.${c.reset}\n`);
-                    process.stdout.write(`   ${c.dim}Run 'b4mal build' to execute after fixing the above.${c.reset}\n\n`);
-                    process.exit(1);
-                }
+                if (issues > 0) process.exit(1);
                 break;
             }
 
