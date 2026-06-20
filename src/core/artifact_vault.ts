@@ -35,6 +35,26 @@ export class ArtifactVault {
         return existsSync(this.getArchivePath(logicHash, projectRoot));
     }
 
+    /** Delete an artifact archive. No-op if it doesn't exist. */
+    static remove(logicHash: string, projectRoot?: string): void {
+        const archivePath = this.getArchivePath(logicHash, projectRoot);
+        try { unlinkSync(archivePath); } catch { /* already gone */ }
+    }
+
+    /** Delete all artifact archives for a given project. */
+    static async purgeAll(projectRoot: string): Promise<void> {
+        const fs = require("fs");
+        const vaultDir = this.getVaultDir(projectRoot);
+        if (!existsSync(vaultDir)) return;
+        try {
+            for (const entry of fs.readdirSync(vaultDir)) {
+                if (entry.endsWith(this.archiveExtension)) {
+                    try { unlinkSync(join(vaultDir, entry)); } catch {}
+                }
+            }
+        } catch { /* vault dir may not exist or be empty */ }
+    }
+
     /**
      * Pack declared write paths into a zstd-compressed archive.
      *
@@ -184,4 +204,36 @@ export class ArtifactVault {
         const listOutput = await new Response(listProc.stdout).text();
         await listProc.exited;
 
-        const resolvedRoot = require("fs").realpathSync(require("path").resolve(projec                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
+        const fs = require("fs");
+        const path = require("path");
+        // Realpath resolves macOS /tmp → /private/tmp symlinks so boundary
+        // checks compare canonical paths, not mixed symlink/resolved pairs.
+        const resolvedRoot = fs.realpathSync(path.resolve(projectRoot));
+
+        for (const entry of listOutput.trim().split("\n")) {
+            if (!entry) continue;
+            const normalized = entry.replace(/^\.\//, "");
+            if (normalized.startsWith("/") || normalized.includes("..")) {
+                throw new Error(`Unpack rejected: archive contains unsafe path "${entry}"`);
+            }
+            // Resolve against the real (canonical) root so the prefix check
+            // works on macOS where /tmp is a symlink to /private/tmp.
+            const resolved = path.resolve(resolvedRoot, normalized);
+            if (!resolved.startsWith(resolvedRoot + path.sep) && resolved !== resolvedRoot) {
+                throw new Error(`Unpack rejected: path "${entry}" escapes project root`);
+            }
+        }
+
+        // Extract: zstd decompress into tar for extraction
+        const extractProc = Bun.spawn(
+            ["tar", "-xf", "-", "-C", projectRoot],
+            { stdin: Bun.spawn(["zstd", "-d", archivePath, "--stdout"]).stdout, stdout: "pipe", stderr: "pipe" },
+        );
+        const extractErr = await new Response(extractProc.stderr).text();
+        const extractCode = await extractProc.exited;
+
+        if (extractCode !== 0) {
+            throw new Error(`Unpack failed: tar exited ${extractCode} (${extractErr.trim()})`);
+        }
+    }
+}

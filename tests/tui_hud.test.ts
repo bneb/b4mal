@@ -1,6 +1,14 @@
 import { test, expect } from "bun:test";
 import { TuiReporter } from "../src/reporter/tui_hud";
-import type { TaskResult } from "../src/schema";
+
+interface TaskResult {
+    id: string;
+    exitCode: number;
+    durationMs: number;
+    stdout: string;
+    stderr: string;
+    cacheHit: false | "content" | "logic";
+}
 
 test("TuiReporter - handles task states and generates lines without throwing", () => {
     const reporter = new TuiReporter(["A", "B", "C"], "TestPipeline");

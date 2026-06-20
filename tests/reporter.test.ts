@@ -10,8 +10,24 @@ import {
     reportError,
     reportValidationErrors
 } from "../src/reporter";
-import type { TaskResult, PipelineResult } from "../src/schema";
 import type { TaxReport, BottleneckReport } from "../src/core/telemetry_aggregator";
+
+interface TaskResult {
+    id: string;
+    exitCode: number;
+    durationMs: number;
+    stdout: string;
+    stderr: string;
+    cacheHit: false | "content" | "logic";
+}
+
+interface PipelineResult {
+    name: string;
+    tasks: TaskResult[];
+    totalDurationMs: number;
+    overheadMs: number;
+    success: boolean;
+}
 
 describe("reporter.ts", () => {
     let logSpy: any;

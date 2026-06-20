@@ -3,7 +3,14 @@
  * @description Renders a structured, text-based user interface for CI environments.
  */
 
-import type { TaskResult } from "../schema";
+interface TaskResult {
+    id: string;
+    exitCode: number;
+    durationMs: number;
+    stdout: string;
+    stderr: string;
+    cacheHit: false | "content" | "logic";
+}
 
 const R = "\x1b[0m";
 const B = "\x1b[1m";

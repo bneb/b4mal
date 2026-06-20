@@ -4,8 +4,26 @@
  * High-intensity ANSI terminal dashboard. Zero dependencies.
  * Renders: Isolation HUD, Wave Visualization, Metabolic Profile, Flight Summary.
  */
-import type { TaskResult, PipelineResult } from "./schema";
 import type { TaxReport, StatsReport, BottleneckReport } from "./core/telemetry_aggregator";
+
+// ─── Local Types ───────────────────────────────────────────────────────────────
+
+interface TaskResult {
+    id: string;
+    exitCode: number;
+    durationMs: number;
+    stdout: string;
+    stderr: string;
+    cacheHit: false | "content" | "logic";
+}
+
+interface PipelineResult {
+    name: string;
+    tasks: TaskResult[];
+    totalDurationMs: number;
+    overheadMs: number;
+    success: boolean;
+}
 
 // ─── ANSI Palette ────────────────────────────────────────────────────────────
 // Curated for "Starship" feel — not generic terminal colors.

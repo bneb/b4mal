@@ -186,7 +186,7 @@ export const B4malConfigSchema = z.object({
 
 export type B4malConfig = z.infer<typeof B4malConfigSchema>;
 
-// ─── Legacy Schema (deprecated — remove after test migration) ──────────────
+// ─── Mint Transpiler Types (used by b4mal migrate for RWX Mint → B4mal) ───
 
 export const TaskSchema = z.object({
   id: z.string().min(1),
@@ -199,17 +199,6 @@ export const TaskSchema = z.object({
 
 export type Task = z.infer<typeof TaskSchema>;
 
-export const TaskResultSchema = z.object({
-  id: z.string(),
-  exitCode: z.number().int(),
-  durationMs: z.number(),
-  stdout: z.string(),
-  stderr: z.string(),
-  cacheHit: z.union([z.literal(false), z.literal("content"), z.literal("logic")]).default(false),
-});
-
-export type TaskResult = z.infer<typeof TaskResultSchema>;
-
 export const PipelineSchema = z.object({
   name: z.string().min(1),
   tasks: z.array(TaskSchema).min(1),
@@ -218,13 +207,3 @@ export const PipelineSchema = z.object({
 });
 
 export type Pipeline = z.infer<typeof PipelineSchema>;
-
-export const PipelineResultSchema = z.object({
-  name: z.string(),
-  tasks: z.array(TaskResultSchema),
-  totalDurationMs: z.number(),
-  overheadMs: z.number(),
-  success: z.boolean(),
-});
-
-export type PipelineResult = z.infer<typeof PipelineResultSchema>;
