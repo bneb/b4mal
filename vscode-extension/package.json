@@ -1,34 +1,47 @@
 {
   "name": "b4mal",
   "displayName": "B4mal",
-  "description": "Deterministic build orchestrator — collision detection for b4mal.config.json",
+  "description": "Verified monorepo build orchestrator — real-time collision detection and DAG verification",
   "version": "0.1.0",
   "publisher": "b4mal",
-  "engines": { "vscode": "^1.80.0" },
-  "dependencies": {
-    "vscode-languageclient": "^9.0.0"
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
   },
   "categories": ["Linters", "Other"],
   "activationEvents": [
-    "onLanguage:json"
+    "onLanguage:json",
+    "onLanguage:jsonc"
   ],
   "main": "./extension.js",
   "contributes": {
-    "languages": [{
-      "id": "b4mal",
-      "extensions": [".b4mal"],
-      "aliases": ["B4mal Config"],
-      "filenames": ["b4mal.config.json", "b4mal.lock"]
-    }],
-    "configuration": {
-      "title": "B4mal",
-      "properties": {
-        "b4mal.lsp.path": {
-          "type": "string",
-          "default": "b4mal",
-          "description": "Path to the b4mal binary for LSP"
-        }
+    "languages": [
+      {
+        "id": "b4mal-lock",
+        "extensions": [".lock"],
+        "filenames": ["b4mal.lock"],
+        "aliases": ["b4mal Lockfile"]
       }
-    }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": "b4mal.lock",
+        "url": "./schemas/b4mal-lock.schema.json"
+      },
+      {
+        "fileMatch": "b4mal.config.json",
+        "url": "./schemas/b4mal-config.schema.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "b4mal.check",
+        "title": "B4mal: Check DAG Correctness"
+      },
+      {
+        "command": "b4mal.build",
+        "title": "B4mal: Build"
+      }
+    ]
   }
 }

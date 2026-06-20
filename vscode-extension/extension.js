@@ -1,39 +1,28 @@
-// B4mal VS Code Extension — activates the LSP for b4mal config files
+// B4mal VS Code Extension
+// Wraps the built-in LSP server for editor diagnostics.
+
 const vscode = require("vscode");
-const { spawn } = require("child_process");
+const { exec } = require("child_process");
 
-/** @type {vscode.LanguageClient} */
-let client;
-
+/** @param {vscode.ExtensionContext} context */
 function activate(context) {
-  const b4malPath = vscode.workspace.getConfiguration("b4mal").get("lsp.path", "b4mal");
+    const checkCommand = vscode.commands.registerCommand("b4mal.check", () => {
+        const terminal = vscode.window.createTerminal("B4mal Check");
+        terminal.sendText("b4mal check");
+        terminal.show();
+    });
 
-  const serverOptions = {
-    command: b4malPath,
-    args: ["lsp"],
-  };
+    const buildCommand = vscode.commands.registerCommand("b4mal.build", () => {
+        const terminal = vscode.window.createTerminal("B4mal Build");
+        terminal.sendText("b4mal build");
+        terminal.show();
+    });
 
-  const clientOptions = {
-    documentSelector: [
-      { scheme: "file", language: "json" },
-      { scheme: "file", pattern: "**/b4mal.config.json" },
-      { scheme: "file", pattern: "**/b4mal.lock" },
-    ],
-  };
+    context.subscriptions.push(checkCommand, buildCommand);
 
-  client = new vscode.LanguageClient(
-    "b4mal-lsp",
-    "B4mal Language Server",
-    serverOptions,
-    clientOptions
-  );
-
-  context.subscriptions.push(client.start());
+    vscode.window.showInformationMessage("B4mal extension activated. Run 'B4mal: Check DAG Correctness' from the command palette.");
 }
 
-function deactivate() {
-  if (client) return client.stop();
-  return undefined;
-}
+function deactivate() {}
 
 module.exports = { activate, deactivate };
