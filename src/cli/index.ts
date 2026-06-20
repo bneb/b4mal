@@ -254,6 +254,43 @@ async function main() {
                 break;
             }
 
+            // ── check ────────────────────────────────────────────────────────
+            case "check": {
+                banner("Verifying DAG Correctness…");
+                info("Checking resource isolation and shadowing without executing tasks.");
+
+                const plan = await engine.plan();
+                let issues = plan.conflicts.length;
+                if (issues > 0) {
+                    warn(`${issues} resource collision(s) detected:`);
+                    for (const conflict of plan.conflicts) {
+                        process.stdout.write(
+                            `   ${c.red}Collision${c.reset}: ${c.bold}${conflict.taskA}${c.reset} ↔ ${c.bold}${conflict.taskB}${c.reset} on ${c.dim}${conflict.resource}${c.reset}\n`
+                        );
+                    }
+                }
+
+                const shadows = await engine.shadow();
+                issues += shadows.length;
+                if (shadows.length > 0) {
+                    warn(`${shadows.length} shadowing event(s) detected:`);
+                    for (const s of shadows) {
+                        process.stdout.write(
+                            `   ${c.yellow}Shadow${c.reset}: ${c.bold}${s.taskB}${c.reset} masks ${c.bold}${s.taskA}${c.reset} on ${c.dim}${s.counterexample}${c.reset}\n`
+                        );
+                    }
+                }
+
+                if (issues === 0) {
+                    ok("DAG verified — no collisions, no shadowing.");
+                } else {
+                    process.stdout.write(`\n   ${c.red}${issues} issue(s) found.${c.reset}\n`);
+                    process.stdout.write(`   ${c.dim}Run 'b4mal build' to execute after fixing the above.${c.reset}\n\n`);
+                    process.exit(1);
+                }
+                break;
+            }
+
             // ── shadow ───────────────────────────────────────────────────────
             case "shadow": {
                 banner("Auditing DAG for Deterministic Shadowing…");
@@ -341,7 +378,7 @@ async function main() {
 
             // ── unknown ───────────────────────────────────────────────────────
             default: {
-                fail(`Unknown command: "${command}". Usage: b4mal <init|build|shadow|migrate|clean>`);
+                fail(`Unknown command: "${command}". Usage: b4mal <init|check|build|shadow|migrate|clean>`);
                 printUsage();
                 process.exit(1);
             }
@@ -368,6 +405,7 @@ function printUsage(): void {
   ${c.bold}Usage:${c.reset}
     b4mal demo           🛑 See the engine intercept a race condition live (start here)
     b4mal init           Discover source files → b4mal.lock
+    b4mal check          Verify DAG correctness (collisions + shadowing, no execution)
     b4mal setup ci       Generate zero-configuration GitHub Actions workflow
     b4mal build          Prove + execute DAG (cache-aware)
     b4mal shadow         Audit DAG for deterministic output masking
