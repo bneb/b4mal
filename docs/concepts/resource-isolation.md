@@ -24,7 +24,9 @@ Task A's writes must not overlap with Task B's reads or writes, and vice versa. 
 
 ## Attestations
 
-When a wave passes verification, B4mal generates a cryptographic **isolation attestation** — a SHA-256 signed proof that the task set was verified conflict-free. This creates an audit trail for build correctness, useful in regulated environments (SOC 2, FedRAMP) where build reproducibility must be demonstrable.
+When a wave passes verification, B4mal records an **isolation attestation** containing the verifier identity, the task set, a timestamp, and a SHA-256 digest over that payload.
+
+It is a digest, **not a signature**. There is no key material involved, so it does not establish who produced it — it only makes the verified task set tamper-evident if you retain the digest somewhere trustworthy and compare later. The `signature` field in the attestation schema is an explicit placeholder for a future signed version and is never populated. Treat attestations as a local audit record, not as cryptographic proof of correctness.
 
 ## Shadowing detection
 

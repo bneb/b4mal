@@ -65,7 +65,7 @@ After verifying a wave of concurrent tasks, B4mal generates a signed attestation
 }
 ```
 
-This attestation cryptographically proves that the task set was verified conflict-free at the time of execution. In regulated environments, attestations provide an audit trail for build correctness.
+This attestation records that the task set was verified conflict-free at the time of execution. It is an unkeyed SHA-256 digest, not a signature: it is tamper-evident if you keep the digest somewhere trustworthy, but it does not prove who produced it or that nothing re-ran afterwards. Use it as a local audit record.
 
 ## Environment sanitization
 

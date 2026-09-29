@@ -12,28 +12,32 @@ hero:
       link: /guide/getting-started
     - theme: alt
       text: View on GitHub
-      link: https://github.com/b4mal/b4mal
+      link: https://github.com/bneb/b4mal
   image:
     src: /logo.svg
     alt: B4mal
 
 features:
   - icon: 🔒
-    title: Formal Resource Verification
-    details: B4mal proves that concurrent tasks cannot interfere via a prefix-tree collision detector. No more silent race conditions in your build pipeline.
+    title: Resource Isolation
+    details: Every task declares the files, directories and env vars it touches. Overlapping claims between concurrent tasks are detected by a path-prefix tree and serialized before execution, instead of racing.
   - icon: ⚡
     title: Ast-Normalized Caching
-    details: Comment and whitespace changes don't invalidate the cache. B4mal hashes the logical structure of your code, not its formatting.
-  - icon: 🔍
-    title: Autonomous Trace Synthesis
-    details: Point b4mal at any legacy build script and it will synthesize a correct DAG by tracing system calls — no manual configuration needed.
+    details: For tasks that declare no outputs, inputs are hashed by AST — so comment and formatting changes don't invalidate the cache. Tasks that produce artifacts are keyed on raw input content.
+  - icon: 🧾
+    title: DAG Audit
+    details: b4mal check verifies a lockfile without executing it — reporting collisions, deterministic overwrites, and undeclared producer/consumer pairs the planner had to order for you.
   - icon: 🛡️
-    title: Execution Sandboxing
-    details: Failed tasks are isolated into ephemeral workspaces. Debug without contaminating your working tree.
+    title: Fail-Fast Scheduling
+    details: When a task fails, its transitive dependents are skipped rather than run against inputs that were never produced. Independent tasks still complete.
   - icon: 🌐
     title: Remote Cache (L2)
-    details: Share cache across CI runners and developer machines via S3-compatible storage. Cold builds become cache hits.
+    details: L2 is checked before L1 and pushed after a successful pack, so artifacts can be shared across CI runners via S3-compatible storage. All L2 failures are non-fatal.
   - icon: 📊
-    title: Real-Time Dashboard
-    details: Watch your build execute with live task status, cache hit metrics, and bottleneck detection.
+    title: Build Reports
+    details: b4mal analyze writes a static HTML dashboard covering task timings, the slowest-task bottleneck and cache statistics.
 ---
+
+::: warning Not yet implemented
+Two features are described in older design notes but are **not implemented**: failure sandboxing into `.b4mal/shadow/<taskId>` (no clone-on-failure workspace exists — see [the security model](/concepts/security-model)), and `b4mal trace` on macOS or Windows, which is Linux-only. This page lists what the code does today.
+:::
