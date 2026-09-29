@@ -180,4 +180,26 @@ describe("L2 remote cache — failure handling", () => {
         expect(second.cacheHits).toBe(1);
         expect(readFileSync(join(projectDir, "out/a.txt"), "utf-8")).toBe("l2-payload\n");
     });
+
+    test("an L2 hit is promoted to a usable L1 entry, surviving the remote going away", async () => {
+        // The promote-to-L1 step writes an archive locally. Unless the hit is
+        // also recorded in the ledger, the L1 branch can never use it: the next
+        // run goes back to the network, and — as here — would re-execute when
+        // the remote is unreachable despite a good archive sitting on disk.
+        wipeL1();
+        rmSync(join(projectDir, "out"), { recursive: true, force: true });
+
+        const viaRemote = await build();
+        expect(viaRemote.cacheHits).toBe(1);              // served by L2
+        expect(existsSync(join(projectDir, "out/a.txt"))).toBe(true);
+
+        // Now make the remote unreachable and drop only the produced files.
+        // The ledger and the promoted vault entry remain.
+        rmSync(join(projectDir, "out"), { recursive: true, force: true });
+        const offline = await build({ AWS_S3_ENDPOINT: "http://127.0.0.1:1" });
+
+        expect(offline.exitCode).toBe(0);
+        expect(offline.cacheHits).toBe(1);                // served locally now
+        expect(readFileSync(join(projectDir, "out/a.txt"), "utf-8")).toBe("l2-payload\n");
+    });
 });

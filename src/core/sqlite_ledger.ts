@@ -12,7 +12,12 @@ import { dirname } from "path";
 export interface CacheEntry {
     logicHash: string;
     taskId: string;
-    action: "skip" | "execute";
+    /**
+     * Where the recorded result came from. "l2-hit" means the artifact was
+     * restored from the remote cache and promoted locally, which is still a
+     * usable local entry. Nothing branches on this today; it is provenance.
+     */
+    action: "skip" | "execute" | "l2-hit";
     timestamp: number;
     stdout?: string;
     stderr?: string;

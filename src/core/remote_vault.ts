@@ -8,6 +8,7 @@ import { join } from "path";
 import { existsSync, mkdirSync, writeFileSync, readFileSync, unlinkSync } from "fs";
 import { S3Adapter } from "../remote/s3_adapter";
 import { ArtifactVault } from "./artifact_vault";
+import { ArtifactCrypto } from "./crypto";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -16,7 +17,12 @@ export interface CacheMetadata {
   taskId: string;
   exitCode: number;
   durationMs: number;
-  signature: string | null;
+  /**
+   * HMAC-SHA256 over "<logicHash>:<sha256 of the payload>", or null when no
+   * signing secret is configured. Set by pushWithMetadata, checked by
+   * checkAndPull — see the note on signing below.
+   */
+  signature?: string | null;
 }
 
 export interface CacheResult {
@@ -24,6 +30,28 @@ export interface CacheResult {
   logicHash: string;
   durationMs?: number;
   exitCode?: number;
+}
+
+// ─── Signing ───────────────────────────────────────────────────────────────
+
+/**
+ * Remote artifacts are only authenticated when a signing secret is configured.
+ *
+ * Set `B4MAL_CACHE_SECRET` and pushes are signed, pulls are verified, and an
+ * artifact that fails verification is treated as a miss (so the task simply
+ * re-executes). Without it the remote cache is unauthenticated — anything that
+ * can write to the bucket can influence workspace contents — which is why that
+ * is stated plainly in docs/concepts/caching.md rather than implied away.
+ *
+ * The signed input binds the logic hash as well as the payload, so a validly
+ * signed artifact for one task cannot be served under another task's key.
+ */
+function sha256Hex(data: Buffer): string {
+  return new Bun.CryptoHasher("sha256").update(data).digest("hex");
+}
+
+function signedInput(logicHash: string, payload: Buffer): string {
+  return `${logicHash}:${sha256Hex(payload)}`;
 }
 
 // ─── Metadata Embedding ────────────────────────────────────────────────────
@@ -68,11 +96,15 @@ export interface L2Stats {
 
 export class RemoteVault {
   private adapter: S3Adapter | null;
+  private crypto: ArtifactCrypto;
   lastPromoted: string | null = null;
+  /** Artifacts rejected because their signature was missing or wrong. */
+  rejected: number = 0;
   stats: L2Stats = { pushes: 0, pulls: 0, hits: 0, bytesUp: 0, bytesDown: 0 };
 
-  constructor(adapter: S3Adapter | null) {
+  constructor(adapter: S3Adapter | null, crypto: ArtifactCrypto = new ArtifactCrypto()) {
     this.adapter = adapter;
+    this.crypto = crypto;
   }
 
   // ── checkAndPull ──────────────────────────────────────────────────────
@@ -102,10 +134,25 @@ export class RemoteVault {
 
       // Read and parse the embedded metadata
       const rawData = await Bun.file(tmpPath).arrayBuffer();
-      const metadata = parseEmbeddedMetadata(Buffer.from(rawData));
+      const payload = Buffer.from(rawData);
+      const metadata = parseEmbeddedMetadata(payload);
 
       if (!metadata) {
         // No valid metadata — treat as corrupt artifact, skip
+        return null;
+      }
+
+      // Verify the signature before anything touches the workspace. When a
+      // secret is configured an unsigned or wrongly signed artifact is a miss,
+      // so the task re-executes instead of restoring attacker-controlled files.
+      const headerLen = payload.readUInt32LE(0);
+      const archiveBytes = payload.subarray(4 + headerLen);
+      if (!this.crypto.verify(signedInput(logicHash, archiveBytes), metadata.signature ?? undefined)) {
+        this.rejected++;
+        process.stderr.write(
+          `\x1b[2m[L2] rejected artifact for ${logicHash.slice(0, 12)}…: ` +
+          `signature missing or invalid — re-executing\x1b[0m\n`,
+        );
         return null;
       }
 
@@ -145,8 +192,13 @@ export class RemoteVault {
       const l1Path = ArtifactVault.getArchivePath(logicHash, projectRoot);
       if (!existsSync(l1Path)) return false;
 
-      const rawData = await Bun.file(l1Path).arrayBuffer();
-      const archiveWithMeta = embedMetadata(Buffer.from(rawData), metadata);
+      const rawData = Buffer.from(await Bun.file(l1Path).arrayBuffer());
+
+      // Sign the payload when a secret is configured; otherwise record null and
+      // pulls run in trust mode.
+      const signature = this.crypto.sign(signedInput(logicHash, rawData));
+
+      const archiveWithMeta = embedMetadata(rawData, { ...metadata, signature });
 
       // Write to temp, upload, clean up
       const tmpPath = join(projectRoot, ".b4mal", `l2-push-${logicHash}.tmp`);

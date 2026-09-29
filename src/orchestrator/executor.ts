@@ -242,6 +242,23 @@ export class DynamicExecutor {
               if (producesArtifact) {
                 await ArtifactVault.unpack(logicHash, projectRoot);
               }
+
+              // Record the promoted artifact so it is usable as a local cache
+              // entry. Without this the L1 copy just written was dead weight:
+              // the L1 branch requires a ledger entry, so the next run would go
+              // back to the network, and would re-execute if the remote were
+              // unreachable despite having a perfectly good archive on disk.
+              ledger?.recordEntry({
+                logicHash,
+                taskId: task.id,
+                action: "l2-hit",
+                timestamp: Date.now(),
+                stdout: "[L2 cache hit — restored from remote vault]",
+                stderr: "",
+                durationMs: l2Result.durationMs ?? 0,
+                exitCode: l2Result.exitCode ?? 0,
+              });
+
               return {
                 taskId: task.id,
                 exitCode: l2Result.exitCode ?? 0,
@@ -396,12 +413,13 @@ export class DynamicExecutor {
             // L2 push (non-fatal — build continues on failure)
             if (projectRoot && config?.remoteVault) {
               try {
+                // No signature here: RemoteVault signs the payload itself, so
+                // there is one place that decides how entries are authenticated.
                 await config.remoteVault.pushWithMetadata(logicHash, projectRoot, {
                   logicHash,
                   taskId: task.id,
                   exitCode,
                   durationMs,
-                  signature: null,
                 });
               } catch (err: any) {
                 process.stderr.write(`\x1b[2m[L2] push failed: ${err?.message || err}\x1b[0m\n`);
