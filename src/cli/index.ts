@@ -421,6 +421,18 @@ async function main() {
                 break;
             }
 
+            // ── attest ────────────────────────────────────────────────────────
+            // Machine-facing shim: a build script (the Rust crate included)
+            // declares the resources it will touch and gets back a normalized
+            // claim. JSON on stdout so callers can parse it; exit 1 when the
+            // declaration is unusable.
+            case "attest": {
+                const { AttestHandler } = await import("./attest");
+                const result = await AttestHandler.execute(positionals.slice(3), process.env);
+                process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+                process.exit(result.accepted ? 0 : 1);
+            }
+
             // ── analyze ───────────────────────────────────────────────────────
             case "analyze": {
                 banner("Generating Visual Observability Dashboard…");
@@ -522,6 +534,7 @@ function printUsage(): void {
     b4mal clean          Purge artifact vault + ledger
     b4mal trace "cmd"    Synthesize a DAG automatically via eBPF
     b4mal plugin         Manage and execute decentralized WASM plugins
+    b4mal attest         Declare a task's resources and get a normalized claim (JSON)
 
   ${c.bold}Flags:${c.reset}
     -f, --force             Bypass cache (force re-execution)

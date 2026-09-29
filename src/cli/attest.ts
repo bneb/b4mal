@@ -9,6 +9,7 @@
 //   fs:read:<path>      → read
 //   fs:write:<path>     → write
 //   env:<var>            → envRead (default)
+//   env:read:<var>       → envRead (same as bare env:)
 //   env:write:<var>      → envWrite
 //   port:<number>        → write (exclusive)
 
@@ -64,8 +65,10 @@ export class AttestHandler {
                 reads.push(arg.slice(3)); // bare fs: defaults to read
             } else if (arg.startsWith("env:write:")) {
                 envWrites.push(arg.slice(10));
+            } else if (arg.startsWith("env:read:")) {
+                envReads.push(arg.slice(9));
             } else if (arg.startsWith("env:")) {
-                envReads.push(arg.slice(4));
+                envReads.push(arg.slice(4)); // bare env: defaults to read
             } else if (arg.startsWith("port:")) {
                 ports.push(arg.slice(5));
             }
