@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Development
-bun test                          # Full test suite (~70 files, 565 tests)
+bun test                          # Full test suite (62 files, 570 tests)
 bun test tests/config_schema.test.ts   # Run a single test file
 bun test --reporter=dot tests/    # Compact output for regression check
 bunx tsc --noEmit                 # Type-check without emitting (required by CI)
@@ -70,9 +70,9 @@ Three task types coexist. Know which is which:
 |------|----------|---------|------------|
 | `TaskConfig` (Zod-inferred) | `src/schema.ts` | Config parsing | No `id` — key comes from record key |
 | `TaskConfigWithId` (interface) | `src/schema.ts` | Config loader, lockfile I/O | Has `id`, `secrets?`, `when?` |
-| `OrchestratorTask` (interface) | `src/orchestrator/planner.ts` | Planner, executor, engine verification | Has `id`, `deps` (not `dependencies`), `secrets?` |
+| `OrchestratorTask` (interface) | `src/orchestrator/planner.ts` | Planner, executor, engine verification | Has `id`, `deps` (not `dependencies`), `secrets?`, `envReads?`, `envWrites?` |
 
-The engine converts `TaskConfigWithId` → `OrchestratorTask` in `engine.build()` (lines ~145-160). This conversion drops `secrets` unless explicitly included — a previous bug where secrets were silently lost.
+The engine converts `TaskConfigWithId` → `OrchestratorTask` in **both** `engine.plan()` and `engine.build()`. Every field the executor or planner needs must appear in both conversions — dropping one is how the `secrets` bug and the `needsEnv` bug happened.
 
 ### Lockfile format
 
@@ -107,6 +107,20 @@ The verification model is set-theoretic: (W₁ ∩ (R₂ ∪ W₂)) = ∅ ∧ (W
 - **Symlink traversal protections exist** in `config_loader.ts` (loadConfig) and `artifact_vault.ts` (secureCopy). Both use `realpathSync` + path boundary checks. Do not weaken these.
 
 - **The S3 adapter uses `Bun.S3Client` (built-in)**, not `@aws-sdk/client-s3`. The Bun client requires explicit keys — it does not use the AWS credential chain. Credentials come from env vars: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `B4MAL_CACHE_BUCKET`.
+
+- **`planDAG` must not mutate the caller's tasks.** It used to write its normalized access view back onto `t.reads`/`t.writes`/`t.claims`, folding every `fs:` claim into *both* reads and writes. Those same objects are handed to the executor, which uses `reads` for the cache key and `writes` for artifact packing — so declared inputs were archived as artifacts and dropped from cache keys. The planner now keeps its normalized view in a local `accessMap`. `tests/planner_purity.test.ts` guards this.
+
+- **A task's own outputs must never enter its cache key.** `task.claims` is built as `inputs + outputs + explicit claims`, so hashing it directly made the key depend on the content of the file the task writes: the key changed *because the task ran*. `computeCacheKey` in `src/orchestrator/cache_key.ts` hashes only declared inputs (command, `reads`/`claims` minus `writes`, and declared `needsEnv` values). `CACHE_KEY_VERSION` salts the key — bump it whenever the hashed input set changes, or old entries can be read back as hits under a different scheme.
+
+- **Declared env vars reach the task through `envReads`.** `needsEnv` from the lockfile is plumbed to `OrchestratorTask.envReads` in both `engine.plan()` and `engine.build()`. It feeds both the `EnvSanitizer` allow-list and the cache key. If you add a `TaskConfigWithId` field, add it to `OrchestratorTask` *and* both engine conversions — the secrets bug and the `needsEnv` bug were both this mistake.
+
+- **Scheduling is fail-fast.** In `DynamicExecutor.run`, a task whose `exitCode !== 0` must not decrement its dependents' in-degrees. Dependents are marked `skipped: true` (with `exitCode: 1`) transitively instead. `settleIfComplete` resolves on `settled.size === totalTasks`, so skipped tasks still count toward completion. `tests/failfast.test.ts` covers this.
+
+- **`ArtifactVault.pack` writes to a scratch path and renames.** `zstd -o <existing>` refuses to overwrite when stdin is a pipe, so writing straight to the archive path made re-packing any hash impossible; the scratch+rename also prevents a truncated archive from being restored as corrupt output by a later hit.
+
+- **Never pipe `zstd --stdout` into `tar` in the same process tree.** `tar` stops reading at the end-of-archive marker, closing the pipe while zstd still writes; the resulting EPIPE surfaces as an *unhandled rejection* (the inner child's stream is never drained) and kills the CLI. `unpack` decompresses to a file first.
+
+- **`B4MAL_DB_PATH` overrides the ledger path** (`SQLiteLedger` constructor). Used by `tests/dogfood.test.ts` and `tests/cli_integration.test.ts` for cache isolation. Without it those tests write to the project's real `.b4mal/cache.db`.
 
 ## Code style
 

@@ -20,4 +20,4 @@ Prior to parallel execution, overlapping state claims are formally verified. The
 ## Security Guarantees
 - **Symlink Breakouts**: Impossible. Verified via inode and device ID mapping during file descriptor extraction.
 - **Race Conditions**: Mitigated. Caching operations operate strictly on path prefixes evaluated at runtime, locking concurrency models dynamically.
-- **Cache Poisoning**: Rejected. Arbitrary execution inputs are isolated to ephemeral scratchpads (`.b4mal/shadow`) prior to Vault archiving.
+- **Cache Poisoning**: Mitigated. Cache keys derive only from a task's declared inputs — command, declared `reads`, and declared `needsEnv` values — and a task's own declared outputs are excluded from its own key. Artifacts are written to a scratch path and renamed into place, so an interrupted pack cannot leave a truncated archive at a content-addressed path for a later hit to restore.
