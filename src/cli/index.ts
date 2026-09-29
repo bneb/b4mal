@@ -310,7 +310,7 @@ async function main() {
                         taskB: conflict.taskB,
                         resource: conflict.resource,
                         message: `Collision: ${conflict.taskA} ↔ ${conflict.taskB} on ${conflict.resource}`,
-                        help: "https://b4mal.dev/concepts/resource-isolation",
+                        help: "https://github.com/bneb/b4mal/blob/main/docs/concepts/resource-isolation.md",
                     });
                 }
 
@@ -326,7 +326,7 @@ async function main() {
                         resource: s.resources?.[0] ?? s.counterexample,
                         ordering: s.ordering,
                         message: s.counterexample ?? `Shadow: ${s.taskB} masks ${s.taskA}`,
-                        help: "https://b4mal.dev/concepts/resource-isolation#shadowing-detection",
+                        help: "https://github.com/bneb/b4mal/blob/main/docs/concepts/resource-isolation.md#shadowing-detection",
                     });
                 }
 
@@ -369,7 +369,7 @@ async function main() {
                         ok("DAG verified — no collisions, no shadowing.");
                     } else {
                         process.stdout.write(`\n   ${c.red}${issues} issue(s) found.${c.reset}\n`);
-                        process.stdout.write(`   ${c.dim}Docs: https://b4mal.dev/concepts/resource-isolation${c.reset}\n`);
+                        process.stdout.write(`   ${c.dim}Docs: https://github.com/bneb/b4mal/blob/main/docs/concepts/resource-isolation.md${c.reset}\n`);
                         process.stdout.write(`   ${c.dim}Run 'b4mal build' to execute after fixing the above.${c.reset}\n\n`);
                     }
                 }

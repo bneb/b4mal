@@ -3,10 +3,10 @@
 # B4MAL CORE INSTALLER
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #
-# Usage:  curl -fsSL https://b4mal.dev/install.sh | sh
+# Usage:  curl -fsSL https://raw.githubusercontent.com/bneb/b4mal/main/install.sh | sh
 #
 # Idempotent: safe to re-run. Preserves existing
-# license keys and configuration on upgrade.
+# configuration on upgrade.
 #
 # POSIX-compliant. No bash-isms.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -140,29 +140,7 @@ case ":${PATH}:" in
 esac
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# STEP 5: License Discovery
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-LICENSE_PATH="${CONFIG_DIR}/license.key"
-
-if [ -f "${LICENSE_PATH}" ]; then
-    ok "Core License detected"
-else
-    printf "\n"
-    printf "${YELLOW}${BOLD}  ACTION REQUIRED: ACTIVATE LICENSE${NC}\n"
-    line
-    printf "  Drop your ${GREEN}license.key${NC} into:\n"
-    printf "    ${BOLD}${LICENSE_PATH}${NC}\n"
-    printf "\n"
-    printf "  Or run:\n"
-    printf "    ${BOLD}b4mal build${NC}             — Execute your build pipeline\n"
-    printf "\n"
-    printf "  Get a key at ${BOLD}https://b4mal.dev${NC}\n"
-    line
-fi
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# STEP 6: Verify Installation
+# STEP 5: Verify Installation
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 printf "\n"

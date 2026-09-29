@@ -12,7 +12,7 @@ B4mal is a deterministic build orchestrator for monorepos. It guarantees reprodu
 ### 1. Install
 
 ```bash
-curl -fsSL https://b4mal.dev/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/bneb/b4mal/main/install.sh | bash
 ```
 
 Or via Bun:

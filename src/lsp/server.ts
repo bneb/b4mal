@@ -87,7 +87,7 @@ function provideHover() {
         "- `inputs`/`outputs`: Filesystem paths\n" +
         "- `dependencies`: Upstream task IDs\n" +
         "- `claims`: Non-filesystem resources\n\n" +
-        "[Configuration Reference](https://b4mal.dev/guide/configuration)",
+        "[Configuration Reference](https://github.com/bneb/b4mal/blob/main/docs/guide/configuration.md)",
     },
   };
 }

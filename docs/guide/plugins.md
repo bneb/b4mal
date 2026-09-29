@@ -29,7 +29,7 @@ export function postTask(result: TaskResult): TaskResult {
 ### 2. Install
 
 ```bash
-b4mal plugin install https://plugins.b4mal.dev/my-plugin.wasm
+b4mal plugin install https://example.com/my-plugin.wasm
 ```
 
 ### 3. Use

@@ -231,7 +231,7 @@ export class B4malEngine {
      */
     async plan(): Promise<PlanResult> {
       if (!existsSync(this.lockPath)) {
-        throw new Error(`No b4mal.lock found. Run 'b4mal init' first.\n  Docs: https://b4mal.dev/guide/getting-started`);
+        throw new Error(`No b4mal.lock found. Run 'b4mal init' first.\n  Docs: https://github.com/bneb/b4mal/blob/main/docs/guide/getting-started.md`);
       }
       const raw = JSON.parse(readFileSync(this.lockPath, "utf-8"));
       const lockTasks = this.normalizeLockTasks(raw);
@@ -273,7 +273,7 @@ export class B4malEngine {
     async build(options: EngineOptions = {}): Promise<BuildResult> {
         if (!existsSync(this.lockPath)) {
             throw new Error(
-                `No b4mal.lock found. Run 'b4mal init' first. (Looked for: ${this.lockPath})\n  Docs: https://b4mal.dev/guide/getting-started`
+                `No b4mal.lock found. Run 'b4mal init' first. (Looked for: ${this.lockPath})\n  Docs: https://github.com/bneb/b4mal/blob/main/docs/guide/getting-started.md`
             );
         }
 
@@ -393,7 +393,7 @@ export class B4malEngine {
      */
     async analyze(): Promise<string> {
         if (!existsSync(this.lockPath)) {
-            throw new Error(`No b4mal.lock found. Run 'b4mal init' first.\n  Docs: https://b4mal.dev/guide/getting-started`);
+            throw new Error(`No b4mal.lock found. Run 'b4mal init' first.\n  Docs: https://github.com/bneb/b4mal/blob/main/docs/guide/getting-started.md`);
         }
 
         const raw = JSON.parse(readFileSync(this.lockPath, "utf-8"));
