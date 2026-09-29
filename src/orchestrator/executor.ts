@@ -8,9 +8,11 @@ import { StreamEngine } from "../server/stream_engine";
 import { EnvSanitizer } from "../guard/env_sanitizer";
 import { ArtifactVault } from "../core/artifact_vault";
 import { ContentHasher, Semaphore } from "../core/content_hasher";
+import { computeCacheKey } from "./cache_key";
 import { SQLiteLedger } from "../core/sqlite_ledger";
 import { RemoteVault } from "../core/remote_vault";
 import { join } from "path";
+import { existsSync } from "fs";
 import { homedir, cpus } from "os";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -22,6 +24,12 @@ export interface WaveResult {
     stderr: string;
     durationMs: number;
     cached: boolean;
+    /**
+     * True when the task never ran because a dependency it transitively requires
+     * failed. `exitCode` is 1 in that case so the build is correctly reported as
+     * unsuccessful, but the CLI renders it as skipped rather than failed.
+     */
+    skipped?: boolean;
 }
 
 export interface ExecutorConfig {
@@ -49,7 +57,6 @@ export class DynamicExecutor {
             : undefined;
 
 
-        const allResults: WaveResult[] = [];
         const concurrency = config?.concurrency ?? cpus().length;
         const inDegree = new Map(dag.inDegree);
         const readyQueue: string[] = [];
@@ -59,7 +66,6 @@ export class DynamicExecutor {
             if (count === 0) readyQueue.push(id);
         }
 
-        let completedCount = 0;
         let activeCount = 0;
         const totalTasks = dag.tasks.size;
 
@@ -69,6 +75,43 @@ export class DynamicExecutor {
         }
 
         return new Promise<WaveResult[]>((resolve) => {
+            /** Tasks that have a settled result (executed, errored, or skipped). */
+            const settled = new Map<string, WaveResult>();
+            let resolved = false;
+
+            /** Close the ledger and resolve once every task is accounted for. */
+            const settleIfComplete = () => {
+                if (resolved || settled.size < totalTasks) return;
+                resolved = true;
+                ledger?.close();
+                resolve([...settled.values()]);
+            };
+
+            /**
+             * A failed task must not unblock its dependents. Walk the transitive
+             * dependents of a failure and record each as skipped, so downstream
+             * work never runs against inputs that were never produced.
+             */
+            const skipDependentsOf = (failedId: string) => {
+                const stack = [failedId];
+                while (stack.length > 0) {
+                    const current = stack.pop()!;
+                    for (const dependent of dag.dependents.get(current) ?? []) {
+                        if (settled.has(dependent)) continue;
+                        settled.set(dependent, {
+                            taskId: dependent,
+                            exitCode: 1,
+                            stdout: "",
+                            stderr: `Skipped: dependency '${current}' failed.`,
+                            durationMs: 0,
+                            cached: false,
+                            skipped: true,
+                        });
+                        stack.push(dependent);
+                    }
+                }
+            };
+
             const dispatch = async () => {
                 while (readyQueue.length > 0 && activeCount < concurrency) {
                     let taskId: string;
@@ -78,15 +121,20 @@ export class DynamicExecutor {
                     } else {
                         taskId = readyQueue.shift()!;
                     }
+
+                    // A task may be enqueued by a successful parent after another
+                    // parent already failed and skipped it. Never run it.
+                    if (settled.has(taskId)) continue;
+
                     const task = dag.tasks.get(taskId)!;
-                    
+
                     activeCount++;
-                    
+
                     this.executeTask(task, config, ledger).then((result) => {
-                        allResults.push(result);
+                        settled.set(taskId, result);
                     }).catch((err: unknown) => {
                         const message = err instanceof Error ? err.message : String(err);
-                        allResults.push({
+                        settled.set(taskId, {
                             taskId,
                             exitCode: 1,
                             stdout: "",
@@ -96,14 +144,21 @@ export class DynamicExecutor {
                         });
                     }).finally(() => {
                         activeCount--;
-                        completedCount++;
 
-                        // Unblock downstream dependents
-                        for (const dependent of dag.dependents.get(taskId) || []) {
-                            const currentCount = inDegree.get(dependent)! - 1;
-                            inDegree.set(dependent, currentCount);
-                            if (currentCount === 0) {
-                                readyQueue.push(dependent);
+                        const result = settled.get(taskId);
+                        const failed = !result || result.exitCode !== 0;
+
+                        if (failed) {
+                            // Do not unblock dependents: skip them instead.
+                            skipDependentsOf(taskId);
+                        } else {
+                            // Unblock downstream dependents
+                            for (const dependent of dag.dependents.get(taskId) || []) {
+                                const currentCount = inDegree.get(dependent)! - 1;
+                                inDegree.set(dependent, currentCount);
+                                if (currentCount === 0) {
+                                    readyQueue.push(dependent);
+                                }
                             }
                         }
 
@@ -115,12 +170,8 @@ export class DynamicExecutor {
                             taskIds: [taskId],
                         });
 
-                        if (completedCount === totalTasks) {
-                            ledger?.close();
-                            resolve(allResults);
-                        } else {
-                            dispatch();
-                        }
+                        settleIfComplete();
+                        if (!resolved) dispatch();
                     });
                 }
             };
@@ -148,33 +199,32 @@ export class DynamicExecutor {
         const projectRoot = config?.projectRoot;
 
         // ── Parse claims ──────────────────────────────────────────────
-        const fsClaims = task.claims
-            .filter(c => c.startsWith("fs:"))
-            .map(c => c.replace(/^fs:/, ""));
         const envClaims = task.claims
             .filter(c => c.startsWith("env:"))
             .map(c => c.replace(/^env:/, ""));
 
+        // Environment variables the task reads, from both `env:` claims and the
+        // lockfile's `needsEnv`. The latter was previously dropped on the floor:
+        // it never reached the sanitizer, so a task declaring `needsEnv` was
+        // silently denied those variables at runtime.
+        const requestedEnv = [...new Set([...envClaims, ...(task.envReads ?? [])])];
+
         const writes = task.writes ?? [];
         const producesArtifact = writes.length > 0;
-        const useLogicHash = !producesArtifact;
 
         // ── Compute cache hash ────────────────────────────────────────
-        let logicHash: string | undefined;
-        if (projectRoot && fsClaims.length > 0) {
-            const hasher = new Bun.CryptoHasher("sha256");
-            hasher.update(task.id);
-            hasher.update(JSON.stringify(task.cmd));
-            for (const claim of fsClaims.sort()) {
-                const claimHash = await ContentHasher.hashPath(
-                    join(projectRoot, claim),
-                    { useLogicHash, projectRoot }
-                );
-                hasher.update(claim);
-                hasher.update(claimHash);
-            }
-            logicHash = hasher.digest("hex");
-        }
+        // Keyed on DECLARED INPUTS ONLY. `task.claims` is inputs + outputs +
+        // explicit claims, so hashing it directly would make the key depend on
+        // the task's own output content. See src/orchestrator/cache_key.ts.
+        const logicHash = projectRoot
+            ? await computeCacheKey(
+                {
+                    id: task.id, cmd: task.cmd, reads: task.reads, writes: task.writes,
+                    claims: task.claims, envReads: task.envReads,
+                },
+                projectRoot,
+            )
+            : undefined;
 
         const skipCache = config?.force === true;
 
@@ -253,7 +303,7 @@ export class DynamicExecutor {
         const start = performance.now();
 
         const sanitizedEnv = EnvSanitizer.sanitize(
-            envClaims,
+            requestedEnv,
             process.env as Record<string, string>,
         );
 
@@ -269,18 +319,6 @@ export class DynamicExecutor {
         }
 
         let finalCmd = task.cmd;
-        
-        // Runtime Enforcement (macOS sandbox-exec)
-        // If we are on macOS and the task has write claims, we can optionally
-        // wrap the execution in a sandbox profile that strictly denies writes
-        // outside of the claimed directories. This bridges the gap between
-        // static claims and runtime reality.
-        if (process.platform === "darwin" && fsClaims.length > 0) {
-            const writes = fsClaims.filter(c => c.startsWith("write:")).map(c => c.replace("write:", ""));
-            // Simple heuristic: if we have explicit writes, we could generate a profile.
-            // For now, we note the architecture point and fall back to raw spawn,
-            // as generating robust macOS profiles dynamically is complex.
-        }
 
         const proc = Bun.spawn(finalCmd, {
             cwd: projectRoot,
@@ -301,22 +339,47 @@ export class DynamicExecutor {
 
         // ── Post-execution: Pack → Record → Upload ───────────────────
         if (exitCode === 0 && logicHash) {
-            ledger?.recordEntry({
-                logicHash,
-                taskId: task.id,
-                action: "execute",
-                timestamp: Date.now(),
-                stdout: stdout.trim(),
-                stderr: stderr.trim(),
-                durationMs,
-            });
+            // Pack BEFORE recording. A ledger entry is a promise that the result
+            // can be restored; if packing fails there is no artifact to restore
+            // from, and recording anyway would leave a permanent un-restorable
+            // entry that silently degrades every later run to a cache miss.
+            let cacheable = true;
 
             if (projectRoot && producesArtifact) {
-                try {
-                    await ArtifactVault.pack(logicHash, projectRoot, writes);
-                } catch (err) {
-                    console.error("Pack failed:", err);
+                // A task that declared outputs but did not produce them cannot be
+                // cached: there is nothing to archive, and the declared `outputs`
+                // are wrong. Report that precisely instead of surfacing tar's
+                // "Cannot stat" internals.
+                const missing = writes.filter(w => !existsSync(join(projectRoot, w)));
+
+                if (missing.length > 0) {
+                    cacheable = false;
+                    process.stderr.write(
+                        `\x1b[2m[Cache] '${task.id}' declared output(s) not produced: ` +
+                        `${missing.join(", ")} — task will not be cached.\x1b[0m\n`
+                    );
+                } else {
+                    try {
+                        await ArtifactVault.pack(logicHash, projectRoot, writes);
+                    } catch (err) {
+                        cacheable = false;
+                        process.stderr.write(
+                            `\x1b[2m[Cache] pack failed for '${task.id}': ${err instanceof Error ? err.message : err}\x1b[0m\n`
+                        );
+                    }
                 }
+            }
+
+            if (cacheable) {
+                ledger?.recordEntry({
+                    logicHash,
+                    taskId: task.id,
+                    action: "execute",
+                    timestamp: Date.now(),
+                    stdout: stdout.trim(),
+                    stderr: stderr.trim(),
+                    durationMs,
+                });
             }
 
             // L2 push (non-fatal — build continues on failure)

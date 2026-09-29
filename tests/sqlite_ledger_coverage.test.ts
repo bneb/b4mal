@@ -95,3 +95,69 @@ describe("SQLiteLedger", () => {
     expect(ledger.getEntry("to-clear")).toBeNull();
   });
 });
+
+// ─── B4MAL_DB_PATH override ──────────────────────────────────────────────────
+//
+// Isolated runs — notably the dogfood test, which asserts it does not touch the
+// developer's cache — set B4MAL_DB_PATH. The ledger ignored it, so every such
+// run silently wrote to the project's real `.b4mal/cache.db`.
+
+describe("SQLiteLedger — B4MAL_DB_PATH override", () => {
+  let dir: string;
+  const original = process.env.B4MAL_DB_PATH;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "b4mal-dbpath-"));
+  });
+
+  afterEach(() => {
+    if (original === undefined) delete process.env.B4MAL_DB_PATH;
+    else process.env.B4MAL_DB_PATH = original;
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("redirects the ledger away from the requested path", () => {
+    const requested = join(dir, "project", ".b4mal", "cache.db");
+    const override = join(dir, "isolated.db");
+    process.env.B4MAL_DB_PATH = override;
+
+    const led = new SQLiteLedger(requested);
+    try {
+      led.recordEntry({
+        logicHash: "isolated-key",
+        taskId: "t",
+        action: "execute",
+        timestamp: Date.now(),
+        stdout: "",
+        stderr: "",
+        durationMs: 1,
+      });
+    } finally {
+      led.close();
+    }
+
+    const { existsSync } = require("fs");
+    expect(existsSync(override)).toBe(true);
+    expect(existsSync(requested)).toBe(false);
+  });
+
+  test("honours the requested path when the override is unset", () => {
+    delete process.env.B4MAL_DB_PATH;
+    const requested = join(dir, "project", ".b4mal", "cache.db");
+
+    const led = new SQLiteLedger(requested);
+    led.close();
+
+    expect(require("fs").existsSync(requested)).toBe(true);
+  });
+
+  test("ignores a blank override", () => {
+    process.env.B4MAL_DB_PATH = "   ";
+    const requested = join(dir, "project", ".b4mal", "cache.db");
+
+    const led = new SQLiteLedger(requested);
+    led.close();
+
+    expect(require("fs").existsSync(requested)).toBe(true);
+  });
+});

@@ -31,8 +31,17 @@ export class SQLiteLedger {
     /**
      * Open or create a SQLite ledger at the given path.
      * Enables WAL mode and creates the schema if absent.
+     *
+     * `B4MAL_DB_PATH` overrides the path, so isolated runs (notably the dogfood
+     * test, which asserts it does not touch the developer's cache) actually get
+     * their own ledger instead of silently contaminating the real one.
      */
     constructor(dbPath: string) {
+        const override = process.env.B4MAL_DB_PATH;
+        if (override && override.trim().length > 0) {
+            dbPath = override;
+        }
+
         // Ensure parent directory exists
         mkdirSync(dirname(dbPath), { recursive: true });
 

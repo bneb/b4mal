@@ -239,6 +239,7 @@ export class B4malEngine {
         id: t.id, cmd: t.cmd,
         claims: [...t.inputs.map((p: string) => `fs:${p}`), ...t.outputs.map((p: string) => `fs:${p}`), ...t.claims],
         deps: t.dependencies, reads: t.inputs, writes: t.outputs, secrets: t.secrets, when: t.when,
+        envReads: t.needsEnv, envWrites: t.providesEnv,
       }));
       const dag = WavePlanner.planDAG(tasks);
       const taskMap = new Map(lockTasks.map(t => [t.id, t]));
@@ -293,6 +294,8 @@ export class B4malEngine {
           writes: t.outputs,
           secrets: t.secrets,
           when: t.when,
+          envReads: t.needsEnv,
+          envWrites: t.providesEnv,
         }));
 
         // Build a map for executor lookup (carries secrets)
