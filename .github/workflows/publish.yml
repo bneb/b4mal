@@ -4,6 +4,13 @@ on:
   push:
     tags: ["v*"]
 
+# The repository default for GITHUB_TOKEN is read-only, so any job needing to
+# write must ask for it explicitly. Without this the release job retried a 403
+# until it failed ("Too many retries") while the binaries built fine — the token
+# had no permission to create a release.
+permissions:
+  contents: read
+
 jobs:
   binaries:
     name: Build binaries (${{ matrix.target }})
@@ -88,6 +95,9 @@ jobs:
     name: GitHub Release
     runs-on: ubuntu-latest
     needs: binaries
+    # Least privilege: only this job needs to write, and only to contents.
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
