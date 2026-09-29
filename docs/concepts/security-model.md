@@ -71,12 +71,14 @@ This attestation cryptographically proves that the task set was verified conflic
 
 The `EnvSanitizer` filters the environment passed to each task:
 
-- Only explicitly declared `needsEnv` variables are forwarded
-- `providesEnv` variables from upstream tasks are injected into downstream tasks
-- All other environment variables are stripped before the child process is spawned
+- A minimal POSIX whitelist (`PATH`, `HOME`, `USER`, `TMPDIR`, `TERM`) is always forwarded — a subprocess cannot function without it
+- Variables named in `needsEnv`, and any listed in an `env:` claim, are forwarded
+- Every other environment variable is stripped before the child process is spawned
 - Secrets are injected from the host environment at spawn time, never stored or hashed
 
-This prevents implicit environment dependencies — a task can't accidentally depend on `$HOME` or `$USER` unless it declares them.
+Tasks therefore cannot implicitly depend on an undeclared variable. Note that the whitelist is unconditional: `HOME`, `PATH`, `TMPDIR` and friends reach every task whether or not they are declared, so treat them as ambient rather than as isolated inputs. (They *are* hashed into the cache key when declared via `needsEnv`.)
+
+`providesEnv` is **not** an injection mechanism. It is recorded and used for conflict detection — two tasks that both declare the same variable for writing are treated as overlapping — but no value is propagated between tasks. A subprocess cannot set its parent's environment, so there is nothing to forward.
 
 ## Recommendations for production
 
