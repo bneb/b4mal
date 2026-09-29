@@ -1,5 +1,40 @@
 import { readFileSync, existsSync } from "fs";
 
+/**
+ * Normalize an Nx `dependsOn` entry to a task id.
+ *
+ * Nx accepts two shapes and both appear in real workspaces:
+ *
+ *   "build"                                            (plain target)
+ *   "^build"                                           (same target on dependencies)
+ *   { target: "build", projects: ["directory:packages/*"] }
+ *
+ * Only the string form was handled. A workspace using the object form made
+ * `d.replace` throw `TypeError: d.replace is not a function`, which surfaced as a
+ * failed migration — and the caller falls back to AST discovery, emitting one
+ * placeholder task per file. TanStack/query hit exactly this: 565 placeholder
+ * tasks from a single unhandled object.
+ *
+ * Returns null for anything unrecognisable so one malformed entry cannot fail
+ * the whole migration.
+ */
+export function normalizeNxDependency(entry: unknown): string | null {
+    if (typeof entry === "string") {
+        const name = entry.replace(/^\^/, "").trim();
+        return name.length > 0 ? name : null;
+    }
+
+    if (entry && typeof entry === "object" && "target" in entry) {
+        const target = (entry as { target?: unknown }).target;
+        if (typeof target === "string") {
+            const name = target.replace(/^\^/, "").trim();
+            return name.length > 0 ? name : null;
+        }
+    }
+
+    return null;
+}
+
 export class NxMigrator {
     static migrate(nxJsonPath: string): any[] {
         if (!nxJsonPath.endsWith('.json')) {
@@ -8,16 +43,26 @@ export class NxMigrator {
         if (!existsSync(nxJsonPath)) {
             throw new Error(`Nx configuration not found: ${nxJsonPath}`);
         }
-        
+
         const config = JSON.parse(readFileSync(nxJsonPath, "utf-8"));
         const tasks = [];
-        
+
         for (const [taskId, def] of Object.entries(config.targetDefaults || {})) {
             const dependsOn = (def as any).dependsOn || [];
+
+            // Deduplicate while preserving declaration order.
+            const deps = [
+                ...new Set(
+                    (Array.isArray(dependsOn) ? dependsOn : [])
+                        .map(normalizeNxDependency)
+                        .filter((d): d is string => d !== null),
+                ),
+            ];
+
             tasks.push({
                 id: taskId,
                 cmd: ["npx", "nx", "run", taskId],
-                deps: dependsOn.map((d: string) => d.replace('^', '')),
+                deps,
                 claims: [],
                 reads: (def as any).inputs || [],
                 writes: (def as any).outputs || [],

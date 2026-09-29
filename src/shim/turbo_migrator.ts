@@ -1,4 +1,5 @@
 import { readFileSync, existsSync } from "fs";
+import { normalizeNxDependency } from "./nx_migrator";
 
 export class TurboMigrator {
     /**
@@ -35,10 +36,25 @@ export class TurboMigrator {
         const pipeline = config.tasks || config.pipeline || {};
         const tasks = [];
         for (const [taskId, def] of Object.entries(pipeline)) {
+            const dependsOn = (def as any).dependsOn || [];
+
+            // Reuse the Nx normalizer: Turborepo's dependsOn is documented as
+            // string[], but a hand-edited or future config can carry the object
+            // form, and the unguarded `.replace` used here previously threw on
+            // any non-string — which fails the whole migration, after which the
+            // caller emits one placeholder task per source file instead.
+            const deps = [
+                ...new Set(
+                    (Array.isArray(dependsOn) ? dependsOn : [])
+                        .map(normalizeNxDependency)
+                        .filter((d): d is string => d !== null),
+                ),
+            ];
+
             tasks.push({
                 id: taskId,
                 cmd: ["npm", "run", taskId],
-                deps: ((def as any).dependsOn || []).map((d: string) => d.replace('^', '')),
+                deps,
                 claims: [],
                 reads: (def as any).inputs || [],
                 writes: (def as any).outputs || [],
