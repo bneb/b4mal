@@ -59,7 +59,28 @@ jobs:
       # which runs the full test suite. Without dependencies installed that
       # suite cannot resolve zod/js-yaml/etc., so the publish aborts.
       - run: bun install
-      - run: npm publish
+
+      # A tag push is not always the first publish of that version. npm rejects
+      # a duplicate version outright ("cannot publish over the previously
+      # published versions"), which would fail this job and hide the fact that
+      # the binaries and the GitHub Release were built successfully alongside it.
+      # 0.1.1 is exactly that case: it was published from a workstation, so the
+      # tag push must still be able to produce the release assets.
+      - name: Check whether this version is already on npm
+        id: published
+        run: |
+          PKG=$(node -p "require('./package.json').name")
+          VER=$(node -p "require('./package.json').version")
+          if npm view "${PKG}@${VER}" version >/dev/null 2>&1; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "${PKG}@${VER} is already published — skipping npm publish."
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to npm
+        if: steps.published.outputs.already != 'true'
+        run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
