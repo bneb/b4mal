@@ -55,6 +55,10 @@ jobs:
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
+      # `npm publish` triggers prepublishOnly ("bun run build && bun test"),
+      # which runs the full test suite. Without dependencies installed that
+      # suite cannot resolve zod/js-yaml/etc., so the publish aborts.
+      - run: bun install
       - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
