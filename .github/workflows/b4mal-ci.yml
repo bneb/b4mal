@@ -41,3 +41,18 @@ jobs:
           bun-version: latest
       - run: bun install
       - run: bash scripts/test-init.sh
+
+  docs:
+    name: Docs site
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      - run: bun install
+      # The claim audit (tests/docs_claims.test.ts) runs as part of the Dogfood
+      # job's `bun test`. This job catches what that cannot: broken frontmatter,
+      # invalid containers and dead internal routes, which only fail at render.
+      - run: bun run docs:build
