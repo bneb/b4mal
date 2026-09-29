@@ -1,0 +1,33 @@
+name: Benchmark
+
+# The init benchmark regressed silently twice: it recorded 35/35 GREEN on
+# 2026-06-20 and was measuring 34/35 by 2026-09-29, because nothing re-ran it.
+# It is too slow and too network-heavy for every push (35 shallow clones), so it
+# runs on a schedule instead. The script exits non-zero on any non-GREEN repo, so
+# a regression fails the run rather than sitting unnoticed in a document.
+on:
+  schedule:
+    # 06:17 UTC daily — an off-the-hour time, since cron queues are busiest on
+    # the hour.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: Init benchmark (35 repos)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      - name: Run benchmark
+        run: bun run scripts/benchmark-init.ts --max 35
