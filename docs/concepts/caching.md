@@ -25,24 +25,37 @@ B4mal's artifact vault enforces multiple layers of security:
 - **Symlink breakout prevention** — all paths are resolved to canonical form and verified to be within the project root
 - **Path traversal rejection** — archive contents are listed and validated before extraction; any path containing `..` or starting with `/` is rejected
 
-### What is not verified
+### Authenticating remote artifacts
 
-The remote cache is **not authenticated**. A pulled artifact is checked for safe
-paths, then extracted — its contents are otherwise trusted as-is.
+Remote entries are signed when a secret is configured:
 
-- The metadata header carries a `signature` field, and `src/core/crypto.ts` provides a
-  verification helper, but neither is wired in: pushes send `signature: null` and pulls
-  never check it. There is no signing key involved anywhere in the cache path.
-- Consequently, anyone able to write to the bucket can influence what lands in a
-  workspace — path traversal is blocked, file *contents* are not. Overwriting
-  `b4mal.config.json` or a `package.json` in a restored artifact is enough to matter.
+```bash
+export B4MAL_CACHE_SECRET="a-long-random-string"
+```
 
-Treat the bucket as trusted infrastructure, and scope write access accordingly. Signed
-cache entries are not implemented; do not rely on them until they are.
+With it set, every push embeds an HMAC-SHA256 signature over
+`<logicHash>:<sha256 of the payload>`, and every pull verifies it before anything
+touches the workspace. A missing, malformed or wrong signature makes the artifact a
+**miss** — the task re-executes rather than restoring contents the bucket operator
+could have chosen. That is the safe outcome, and it is not a build failure.
 
-The `logicHash` does not close this gap. It addresses an artifact by its inputs, so a
-mismatched hash means "not found", not "tampered with" — producing a colliding hash is
-not the practical attack, writing to the bucket directly is.
+The signature covers the logic hash as well as the payload, so a validly signed
+artifact for one task cannot be replayed under another task's key.
+
+**Without `B4MAL_CACHE_SECRET` the remote cache is unauthenticated.** Entries are
+stored with a null signature and accepted on the way back in, because there is no
+key to check them against. Anything able to write to the bucket can then influence
+workspace contents: path traversal is rejected (entries containing `..` or starting
+with `/` cannot be extracted), but file *contents* are trusted — overwriting
+`b4mal.config.json` or a `package.json` inside a restored artifact is enough to matter.
+
+So: set a secret if the bucket is reachable by anyone you would not trust to edit
+your working tree. Migrating to signed entries re-executes each already-cached task
+once, since its stored artifact carries no signature.
+
+The `logicHash` does not substitute for this. It *addresses* an artifact by its
+inputs, so a mismatched hash means "not found", not "tampered with" — writing to the
+bucket directly is the practical attack, not forging a colliding hash.
 
 ## Logic hashing
 

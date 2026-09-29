@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Development
-bun test                          # Full test suite (62 files, 570 tests)
+bun test                          # Full test suite (67 files, 628 tests)
 bun test tests/config_schema.test.ts   # Run a single test file
 bun test --reporter=dot tests/    # Compact output for regression check
 bunx tsc --noEmit                 # Type-check without emitting (required by CI)
@@ -16,6 +16,7 @@ bun run build                     # Compile CLI to dist/index.js (bun build --ta
 bun run src/cli/index.ts build    # Self-hosted build (reads b4mal.lock)
 bun run src/cli/index.ts demo     # Run the interactive collision-detection demo
 bun run src/cli/index.ts init     # Auto-discover project structure, write b4mal.lock
+bun run src/cli/index.ts attest t fs:write:dist   # Normalized resource claim (JSON)
 
 # Docs
 bun run docs:dev                  # Start vitepress dev server
@@ -24,7 +25,8 @@ bun run docs:preview              # Preview built docs site
 
 # Publishing
 bun publish                       # Publish to npm (runs build + test first)
-bun run scripts/benchmark-init.ts # Test init against 33 real repos (scores GREEN/YELLOW/RED)
+bun run scripts/benchmark-init.ts # Test init against 35 real repos (scores GREEN/YELLOW/RED)
+cargo test --manifest-path crates/b4mal/Cargo.toml   # Rust integration crate
 
 # Sprint tracking
 # Active sprint: artifacts/plans/sprint-go-to-market.md
@@ -92,7 +94,11 @@ The verification model is set-theoretic: (W₁ ∩ (R₂ ∪ W₂)) = ∅ ∧ (W
 
 - **Bun, not Node.** Use `Bun.spawn`, `Bun.file`, `Bun.CryptoHasher`, `Bun.write`. Avoid Node-specific APIs. `require()` works but is discouraged in ESM modules.
 
-- **L2 cache is wired.** `RemoteVault` and `S3Adapter` are connected to `DynamicExecutor`. L2 is checked before L1 (shared cache is fresher), and results are pushed to L2 after successful L1 pack. All L2 failures are non-fatal. Set `B4MAL_CACHE_BUCKET` + `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` to enable.
+- **L2 cache is wired and tested.** `RemoteVault` and `S3Adapter` are connected to `DynamicExecutor`. L2 is checked before L1 (shared cache is fresher), and results are pushed to L2 after a successful L1 pack. All L2 failures are non-fatal — including a rejected signature, which becomes a miss so the task re-executes. Enable with `B4MAL_CACHE_BUCKET` + `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`; optional `AWS_REGION`, `AWS_S3_ENDPOINT` (MinIO, R2, B2 — the adapter is path-style), and `B4MAL_CACHE_ORG` (key prefix for sharing one bucket between tenants). `tests/remote_cache_l2.test.ts` drives the real CLI against an in-memory S3 stub (`tests/fixtures/s3_stub.ts`) — no credentials or network needed.
+
+- **A remote cache hit must unpack, not just promote.** `RemoteVault.checkAndPull` promotes the downloaded archive into the L1 vault, but promoting only *writes* the archive. The executor has to call `ArtifactVault.unpack` for the task's files to reappear, and must record a ledger entry so the promoted copy is usable without going back to the network. Both were missing; an L2 hit used to report success with the declared outputs absent.
+
+- **Remote artifacts are only authenticated when `B4MAL_CACHE_SECRET` is set.** Pushes then embed an HMAC-SHA256 over `<logicHash>:<sha256 of payload>` and pulls verify it, treating a failure as a miss. Without the secret the remote cache is unauthenticated by design and the docs say so — do not describe it as verified. `ArtifactCrypto` (`src/core/crypto.ts`) is the single place that signs and checks; keep it that way rather than signing at call sites.
 
 - **`--force` flag** — parsed by CLI, passed through engine to executor (`config.force`), skips both L2 and L1 cache when true.
 

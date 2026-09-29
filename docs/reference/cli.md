@@ -122,16 +122,53 @@ Transpile a legacy Mint/RWX YAML pipeline to B4mal format.
 b4mal migrate < input.yaml > output.ts
 ```
 
+## `b4mal attest`
+
+Declare the resources a task will touch and get back a normalized claim as JSON.
+Intended for build scripts and other tooling — `crates/b4mal` calls it — rather
+than for interactive use.
+
+```bash
+b4mal attest build fs:read:src fs:write:dist env:NODE_ENV port:8080
+```
+
+```json
+{
+  "accepted": true,
+  "taskName": "build",
+  "caller": { "name": "unknown", "version": "unknown" },
+  "claim": {
+    "id": "build",
+    "reads": ["src"],
+    "writes": ["dist", "port:8080"],
+    "envReads": ["NODE_ENV"],
+    "envWrites": []
+  }
+}
+```
+
+Claim prefixes: `fs:<path>` (read), `fs:read:<path>`, `fs:write:<path>`,
+`env:<var>` (read), `env:read:<var>`, `env:write:<var>`, `port:<n>` (treated as an
+exclusive write). Exits `0` when the declaration is accepted and `1` with an
+`error` field when it is not — for example a missing task name.
+
+Set `B4MAL_CALLER` to identify the calling shim (e.g. `rust-shim-v1.0.0`) and it is
+echoed back in `caller`.
+
 ## Environment Variables
 
 | Variable | Purpose |
 |----------|---------|
 | `B4MAL_DB_PATH` | Override SQLite ledger path |
-| `B4MAL_CACHE_SECRET` | HMAC key for artifact signing |
-| `B4MAL_STRICT_SANDBOX` | Enable OS-level sandboxing |
+| `B4MAL_CACHE_SECRET` | HMAC key for remote artifact signing. Set it and pushes are signed and pulls verified; unset means the remote cache is unauthenticated. See [Caching](/concepts/caching). |
 | `AWS_ACCESS_KEY_ID` | S3 access key for L2 cache |
 | `AWS_SECRET_ACCESS_KEY` | S3 secret key for L2 cache |
 | `AWS_REGION` | S3 region |
 | `B4MAL_CACHE_BUCKET` | S3 bucket for L2 cache |
 | `AWS_S3_ENDPOINT` | Custom S3 endpoint (R2, MinIO, B2) |
 | `B4MAL_CACHE_ORG` | Org prefix for multi-tenant L2 cache |
+| `B4MAL_CALLER` | Caller identity reported by `b4mal attest` |
+
+`B4MAL_STRICT_SANDBOX` was listed here previously as "Enable OS-level sandboxing".
+It is not read by any code — setting it has no effect. Sandboxing is not
+implemented; see the [security model](/concepts/security-model).
