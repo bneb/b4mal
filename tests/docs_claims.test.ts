@@ -253,6 +253,8 @@ describe("docs claims: banned overclaim phrasing", () => {
      *    benchmark result; report the numbers instead.
      *  - "Real-Time Dashboard"                        — the TUI HUD is not wired
      *    into the CLI; `analyze` writes a static HTML report.
+     *  - "cryptographic verification at every layer"   — the remote cache is
+     *    unauthenticated: pushes send signature:null and pulls never verify it.
      */
     const BANNED = [
         /mathematically\s+proven/i,
@@ -263,6 +265,7 @@ describe("docs claims: banned overclaim phrasing", () => {
         /100%\s*GREEN/i,
         /zero\s+placeholders/i,
         /Real-Time\s+Dashboard/i,
+        /cryptographic\s+verification\s+at\s+every\s+layer/i,
     ];
 
     test("docs do not assert claims that were previously false", () => {

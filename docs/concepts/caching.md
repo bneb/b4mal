@@ -1,6 +1,6 @@
 # Caching
 
-B4mal uses a two-tier cache architecture with cryptographic verification at every layer.
+B4mal uses a two-tier cache architecture: a local artifact vault, and an optional S3-compatible remote.
 
 ## Cache layers
 
@@ -24,6 +24,25 @@ B4mal's artifact vault enforces multiple layers of security:
 - **TOCTOU protection** — inode and device IDs are verified after opening to detect swap attacks
 - **Symlink breakout prevention** — all paths are resolved to canonical form and verified to be within the project root
 - **Path traversal rejection** — archive contents are listed and validated before extraction; any path containing `..` or starting with `/` is rejected
+
+### What is not verified
+
+The remote cache is **not authenticated**. A pulled artifact is checked for safe
+paths, then extracted — its contents are otherwise trusted as-is.
+
+- The metadata header carries a `signature` field, and `src/core/crypto.ts` provides a
+  verification helper, but neither is wired in: pushes send `signature: null` and pulls
+  never check it. There is no signing key involved anywhere in the cache path.
+- Consequently, anyone able to write to the bucket can influence what lands in a
+  workspace — path traversal is blocked, file *contents* are not. Overwriting
+  `b4mal.config.json` or a `package.json` in a restored artifact is enough to matter.
+
+Treat the bucket as trusted infrastructure, and scope write access accordingly. Signed
+cache entries are not implemented; do not rely on them until they are.
+
+The `logicHash` does not close this gap. It addresses an artifact by its inputs, so a
+mismatched hash means "not found", not "tampered with" — producing a colliding hash is
+not the practical attack, writing to the bucket directly is.
 
 ## Logic hashing
 
