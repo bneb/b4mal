@@ -8,8 +8,8 @@
  * the repo, which does not exist — an ENOENT that surfaced as an unhandled
  * rejection and exit 1.
  */
-import { describe, test, expect, afterEach } from "bun:test";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, cpSync } from "fs";
+import { describe, test, expect, afterEach, beforeAll } from "bun:test";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, cpSync, existsSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { getVersion, FALLBACK_VERSION } from "../src/cli/version";
@@ -19,6 +19,26 @@ const CLI_SRC = join(REPO_ROOT, "src/cli/index.ts");
 const DIST_ENTRY = join(REPO_ROOT, "dist/index.js");
 
 let scratch: string | undefined;
+
+// `dist/` is gitignored, so a fresh CI checkout has no bundle — and CI's Dogfood
+// job runs `bun test` BEFORE its build step. The bundled layout is precisely what
+// regressed here, so build it on demand rather than skipping these tests.
+beforeAll(async () => {
+    if (existsSync(DIST_ENTRY)) return;
+
+    const proc = Bun.spawn(
+        ["bun", "build", CLI_SRC, "--outdir", join(REPO_ROOT, "dist"), "--target", "bun"],
+        { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
+    );
+    const [stderr, exitCode] = await Promise.all([
+        new Response(proc.stderr).text(),
+        proc.exited,
+    ]);
+
+    if (exitCode !== 0) {
+        throw new Error(`could not build dist/ for these tests: ${stderr}`);
+    }
+}, 120000);
 
 afterEach(() => {
     if (scratch) rmSync(scratch, { recursive: true, force: true });
