@@ -1,63 +1,81 @@
 # Benchmark Results
 
-`b4mal init` tested against 35 real open-source monorepos across 5 ecosystems.
+`b4mal init` tested against 35 real open-source repositories across 5 ecosystems.
 
-**35/35 GREEN — 100% functional commands.** Zero failures, zero placeholders.
+**34/35 GREEN (97%).** One repository is YELLOW; none failed.
 
-| Ecosystem | Repos tested | Result |
-|-----------|-------------|--------|
-| TypeScript (pnpm) | 10 | 100% GREEN |
-| JavaScript (npm) | 5 | 100% GREEN |
-| TypeScript (large) | 5 | 100% GREEN |
-| Rust | 5 | 100% GREEN |
-| Go | 3 | 100% GREEN |
-| Python | 3 | 100% GREEN |
-| Mixed / polyglot | 4 | 100% GREEN |
+| Status | Repos |
+|--------|-------|
+| GREEN (lockfile with functional commands) | 34 (97%) |
+| YELLOW (partial or unusable output) | 1 (3%) |
+| RED (init failed) | 0 |
+
+| Metric | Value |
+|--------|-------|
+| Total tasks generated | 1153 |
+| Functional commands | 588 (51%) |
+| Placeholder commands | 0 |
+
+The 51% figure is not spread across the suite: every repository except one generates
+100% functional commands. All 565 non-functional tasks come from a single repo —
+see [Known gap](#known-gap-tanstackquery) below.
 
 ## All 35 repos
 
-| # | Repo | Tasks | Init time |
-|---|------|-------|-----------|
-| 1 | colinhacks/zod | 22 | 0.6s |
-| 2 | vitest-dev/vitest | 29 | 0.8s |
-| 3 | changesets/changesets | 12 | 0.9s |
-| 4 | TanStack/query | 10 | 0.8s |
-| 5 | pmndrs/zustand | 25 | 1.1s |
-| 6 | remix-run/react-router | 35 | 1.1s |
-| 7 | shadcn-ui/ui | 12 | 1.6s |
-| 8 | date-fns/date-fns | 9 | 1.5s |
-| 9 | markedjs/marked | 21 | 1.8s |
-| 10 | nestjs/nest | 2 | 2.2s |
-| 11 | babel/babel | 13 | 2.2s |
-| 12 | eslint/eslint | 35 | 1.5s |
-| 13 | prettier/prettier | 38 | 2.9s |
-| 14 | webpack/webpack | 52 | 1.7s |
-| 15 | rollup/rollup | 54 | 1.8s |
-| 16 | vitejs/vite | 21 | 2.4s |
-| 17 | axios/axios | 21 | 2.4s |
-| 18 | evanw/esbuild | 2 | 2.8s |
-| 19 | privatenumber/tsx | 9 | 1.9s |
-| 20 | BurntSushi/ripgrep | 4 | 2.3s |
-| 21 | sharkdp/bat | 3 | 2.9s |
-| 22 | astral-sh/ruff | 4 | 2.6s |
-| 23 | casey/just | 3 | 2.6s |
-| 24 | sharkdp/fd | 3 | 2.3s |
-| 25 | golang/tools | 2 | 3.7s |
-| 26 | gohugoio/hugo | 2 | 3.5s |
-| 27 | cli/cli | 2 | 2.8s |
-| 28 | pypa/pip | 2 | 2.6s |
-| 29 | python-poetry/poetry | 2 | 2.9s |
-| 30 | psf/black | 2 | 1.6s |
-| 31 | prisma/prisma | 3 | 3.1s |
-| 32 | nuxt/nuxt | 33 | 2.1s |
-| 33 | tauri-apps/tauri | 12 | 2.7s |
-| 34 | vercel/turbo | 20 | 2.3s |
-| 35 | nrwl/nx | 20 | 1.9s |
+Measured with `bun run scripts/benchmark-init.ts --max 35`. Task counts move as the
+upstream repositories change; these were taken in a single run.
+
+| Repo | Tasks | Status |
+|------|-------|--------|
+| colinhacks/zod | 26 | GREEN |
+| vitest-dev/vitest | 31 | GREEN |
+| changesets/changesets | 21 | GREEN |
+| **TanStack/query** | **565** | **YELLOW** |
+| pmndrs/zustand | 25 | GREEN |
+| remix-run/react-router | 33 | GREEN |
+| shadcn-ui/ui | 16 | GREEN |
+| date-fns/date-fns | 9 | GREEN |
+| markedjs/marked | 21 | GREEN |
+| nestjs/nest | 2 | GREEN |
+| babel/babel | 13 | GREEN |
+| eslint/eslint | 35 | GREEN |
+| prettier/prettier | 38 | GREEN |
+| webpack/webpack | 81 | GREEN |
+| rollup/rollup | 56 | GREEN |
+| vitejs/vite | 21 | GREEN |
+| axios/axios | 21 | GREEN |
+| evanw/esbuild | 2 | GREEN |
+| privatenumber/tsx | 10 | GREEN |
+| BurntSushi/ripgrep | 4 | GREEN |
+| sharkdp/bat | 3 | GREEN |
+| astral-sh/ruff | 4 | GREEN |
+| casey/just | 3 | GREEN |
+| sharkdp/fd | 3 | GREEN |
+| golang/tools | 2 | GREEN |
+| gohugoio/hugo | 2 | GREEN |
+| cli/cli | 2 | GREEN |
+| pypa/pip | 2 | GREEN |
+| python-poetry/poetry | 2 | GREEN |
+| psf/black | 2 | GREEN |
+| prisma/prisma | 11 | GREEN |
+| nuxt/nuxt | 38 | GREEN |
+| tauri-apps/tauri | 15 | GREEN |
+| vercel/turbo | 14 | GREEN |
+| nrwl/nx | 20 | GREEN |
+
+## Known gap: TanStack/query
+
+`init` discovers 565 tasks and produces **no functional commands and no
+placeholders either** — a large but useless lockfile. Every other repository is
+unaffected. This is the only thing standing between the suite and 35/35, and it
+looks like a genuine defect in discovery rather than a cosmetic task-count
+difference.
 
 ## How to reproduce
 
 ```bash
-bun run scripts/benchmark-init.ts --keep
+bun run scripts/benchmark-init.ts --max 35     # add --keep to retain the clones and JSON report
 ```
 
-Generates `benchmark-report.json` with per-repo status, task counts, and timing.
+Generates `benchmark-report.json` with per-repo status, task counts and timing. It
+exits non-zero when any repository is not GREEN, so it is usable as a check.
