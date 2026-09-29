@@ -134,14 +134,24 @@ async function main() {
                 // Report what was actually written rather than assuming. init can
                 // legitimately discover nothing (empty project, unrecognised
                 // layout), and telling the user to "edit the cmd arrays" when the
-                // lock contains no tasks is worse than saying so.
+                // lock contains no tasks is worse than saying so. Likewise, only
+                // warn about placeholders when the lock really contains some —
+                // migrated tasks carry real commands.
                 const lockPath = join(engine.projectRoot, "b4mal.lock");
                 const hasConfig = existsSync(join(engine.projectRoot, "b4mal.config.json"));
 
                 let discovered = 0;
+                let placeholders = 0;
                 try {
                     const raw = JSON.parse(readFileSync(lockPath, "utf-8"));
-                    discovered = (Array.isArray(raw) ? raw : raw.tasks ?? []).length;
+                    const entries = Array.isArray(raw) ? raw : raw.tasks ?? [];
+                    discovered = entries.length;
+                    // Match the placeholder init actually writes, not merely a
+                    // command that happens to start with `echo`.
+                    placeholders = entries.filter((t: any) => {
+                        const cmd = t.cmd ?? [];
+                        return cmd[0] === "echo" && cmd.join(" ").includes("No command found for");
+                    }).length;
                 } catch {
                     // Unreadable lock is reported by `b4mal build`; nothing to add here.
                 }
@@ -153,10 +163,15 @@ async function main() {
                     ok(`b4mal.lock generated — ${discovered} task(s).`);
                     info("b4mal.lock is generated from b4mal.config.json, so edit the config, not the lock.");
                     info("Then run: b4mal build");
-                } else {
+                } else if (placeholders > 0) {
                     ok(`b4mal.lock generated — ${discovered} task(s).`);
-                    warn("The discovered tasks have placeholder commands and will not build anything.");
+                    warn(
+                        `${placeholders} of ${discovered} task(s) have placeholder commands and will not build anything.`
+                    );
                     info("Declare real commands in b4mal.config.json, then run: b4mal build");
+                } else {
+                    ok(`b4mal.lock generated — ${discovered} task(s), all with real commands.`);
+                    info("Review b4mal.lock, then run: b4mal build");
                 }
                 break;
             }
