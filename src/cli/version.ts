@@ -29,9 +29,20 @@ export const FALLBACK_VERSION = "0.1.1";
 
 const PKG_NAME = "b4mal";
 
+/** The bare package name, ignoring any npm scope: "@bneb/b4mal" -> "b4mal". */
+function barePackageName(name: unknown): string | null {
+    if (typeof name !== "string" || name.length === 0) return null;
+    const slash = name.lastIndexOf("/");
+    return slash === -1 ? name : name.slice(slash + 1);
+}
+
 /**
- * Walk upward from `startDir` looking for the b4mal package.json.
+ * Walk upward from `startDir` looking for this package's package.json.
  * Returns the parsed `version` string, or null if none is found.
+ *
+ * The name is matched on its bare form so both the unscoped `b4mal` and the
+ * published scope `@bneb/b4mal` resolve — otherwise scoping the package would
+ * silently degrade every invocation to the compiled-in fallback.
  */
 function findVersion(startDir: string): string | null {
     let dir = startDir;
@@ -40,7 +51,7 @@ function findVersion(startDir: string): string | null {
         try {
             const raw = readFileSync(join(dir, "package.json"), "utf-8");
             const pkg = JSON.parse(raw);
-            if (pkg?.name === PKG_NAME && typeof pkg.version === "string") {
+            if (barePackageName(pkg?.name) === PKG_NAME && typeof pkg.version === "string") {
                 return pkg.version;
             }
         } catch {

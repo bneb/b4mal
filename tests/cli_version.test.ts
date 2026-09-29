@@ -7,27 +7,38 @@
  * that resolves to the repo root; from `dist/` it resolves to the *parent* of
  * the repo, which does not exist — an ENOENT that surfaced as an unhandled
  * rejection and exit 1.
+ *
+ * These tests bundle the CLI into a private temporary directory rather than
+ * using the repo's `dist/`. That directory is shared with the dogfood test,
+ * which runs `b4mal build` — and therefore `bun build --outdir dist` — at the
+ * same time, so writing there from here raced with it and made the suite flaky.
+ * A private bundle also reproduces the failing layout exactly: the entry point
+ * sits one level below its manifest, which is true of `<repo>/dist/index.js`,
+ * `<prefix>/node_modules/@bneb/b4mal/dist/index.js`, and the temp copies alike.
  */
-import { describe, test, expect, afterEach, beforeAll } from "bun:test";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, cpSync, existsSync } from "fs";
+import { describe, test, expect, afterEach, beforeAll, afterAll } from "bun:test";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, cpSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { getVersion, FALLBACK_VERSION } from "../src/cli/version";
 
 const REPO_ROOT = join(import.meta.dir, "..");
 const CLI_SRC = join(REPO_ROOT, "src/cli/index.ts");
-const DIST_ENTRY = join(REPO_ROOT, "dist/index.js");
 
+/** A version that cannot collide with FALLBACK_VERSION or the real one. */
+const SENTINEL_VERSION = "7.7.7-sentinel";
+
+let bundleRoot: string;
+let bundleEntry: string;
 let scratch: string | undefined;
 
-// `dist/` is gitignored, so a fresh CI checkout has no bundle — and CI's Dogfood
-// job runs `bun test` BEFORE its build step. The bundled layout is precisely what
-// regressed here, so build it on demand rather than skipping these tests.
+// Build once, into a private directory: package.json beside a dist/ entry.
 beforeAll(async () => {
-    if (existsSync(DIST_ENTRY)) return;
+    bundleRoot = mkdtempSync(join(tmpdir(), "b4mal-bundle-"));
+    bundleEntry = join(bundleRoot, "dist", "index.js");
 
     const proc = Bun.spawn(
-        ["bun", "build", CLI_SRC, "--outdir", join(REPO_ROOT, "dist"), "--target", "bun"],
+        ["bun", "build", CLI_SRC, "--outdir", join(bundleRoot, "dist"), "--target", "bun"],
         { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
     );
     const [stderr, exitCode] = await Promise.all([
@@ -36,9 +47,15 @@ beforeAll(async () => {
     ]);
 
     if (exitCode !== 0) {
-        throw new Error(`could not build dist/ for these tests: ${stderr}`);
+        throw new Error(`could not build the CLI bundle for these tests: ${stderr}`);
     }
+
+    cpSync(join(REPO_ROOT, "package.json"), join(bundleRoot, "package.json"));
 }, 120000);
+
+afterAll(() => {
+    if (bundleRoot) rmSync(bundleRoot, { recursive: true, force: true });
+});
 
 afterEach(() => {
     if (scratch) rmSync(scratch, { recursive: true, force: true });
@@ -48,6 +65,37 @@ afterEach(() => {
 function packageVersion(): string {
     return JSON.parse(require("fs").readFileSync(join(REPO_ROOT, "package.json"), "utf-8")).version;
 }
+
+/** Write a minimal manifest. */
+function writeManifest(dir: string, name: string, version: string): void {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name, version }, null, 2));
+}
+
+/**
+ * Lay out `<root>/<segments...>/dist/index.js` from the private bundle and
+ * return the entry path.
+ */
+function layOut(root: string, segments: string[], manifest?: { name: string; version: string }): string {
+    const pkgDir = join(root, ...segments);
+    mkdirSync(join(pkgDir, "dist"), { recursive: true });
+    cpSync(bundleEntry, join(pkgDir, "dist", "index.js"));
+    if (manifest) writeManifest(pkgDir, manifest.name, manifest.version);
+    return join(pkgDir, "dist", "index.js");
+}
+
+/** Run a CLI entry point and capture stdout/exit code. */
+async function runCli(entry: string, flag: string, cwd: string) {
+    const proc = Bun.spawn(["bun", entry, flag], { cwd, stdout: "pipe", stderr: "pipe" });
+    const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+    ]);
+    return { stdout, stderr, exitCode };
+}
+
+// ─── Version source itself ──────────────────────────────────────────────────
 
 describe("getVersion", () => {
     test("resolves from the source tree", () => {
@@ -63,66 +111,97 @@ describe("getVersion", () => {
     });
 });
 
-/** Run a CLI entry point and capture stdout/exit code. */
-async function runCli(entry: string, flag: string, cwd: string) {
-    const proc = Bun.spawn(["bun", entry, flag], { cwd, stdout: "pipe", stderr: "pipe" });
-    const [stdout, stderr, exitCode] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-        proc.exited,
-    ]);
-    return { stdout, stderr, exitCode };
-}
+// ─── The original crash ─────────────────────────────────────────────────────
 
-describe("CLI --version / --help from every layout", () => {
-    test("works from the source entry point", async () => {
-        const result = await runCli(CLI_SRC, "--version", REPO_ROOT);
-        expect(result.exitCode).toBe(0);
-        expect(result.stdout.trim()).toBe(packageVersion());
-    });
-
-    test("works from the bundled dist entry point (the original crash)", async () => {
-        const result = await runCli(DIST_ENTRY, "--version", REPO_ROOT);
+describe("CLI --version / --help from bundled layouts", () => {
+    test("--version works from a bundle one level below the real manifest", async () => {
+        const result = await runCli(bundleEntry, "--version", bundleRoot);
         expect(result.exitCode).toBe(0);
         expect(result.stderr).not.toMatch(/UNHANDLED REJECTION/);
         expect(result.stdout.trim()).toBe(packageVersion());
     });
 
-    test("--help works from the bundled dist entry point", async () => {
-        const result = await runCli(DIST_ENTRY, "--help", REPO_ROOT);
+    test("--help works from the same bundle", async () => {
+        const result = await runCli(bundleEntry, "--help", bundleRoot);
         expect(result.exitCode).toBe(0);
         expect(result.stderr).not.toMatch(/UNHANDLED REJECTION/);
         expect(result.stdout).toMatch(/Usage:/);
         expect(result.stdout).toMatch(/Build Engine v\d+\.\d+\.\d+/);
     });
 
-    test("works from a global-install layout", async () => {
-        // Mimic <prefix>/node_modules/b4mal/dist/index.js with a package.json
-        // two levels up.
-        scratch = mkdtempSync(join(tmpdir(), "b4mal-version-"));
-        const pkgDir = join(scratch, "node_modules", "b4mal");
-        mkdirSync(join(pkgDir, "dist"), { recursive: true });
-        cpSync(DIST_ENTRY, join(pkgDir, "dist/index.js"));
-
-        const pkgPath = join(REPO_ROOT, "package.json");
-        cpSync(pkgPath, join(pkgDir, "package.json"));
-
-        const result = await runCli(join(pkgDir, "dist/index.js"), "--version", scratch!);
+    test("works from the source entry point", async () => {
+        const result = await runCli(CLI_SRC, "--version", REPO_ROOT);
         expect(result.exitCode).toBe(0);
         expect(result.stdout.trim()).toBe(packageVersion());
     });
+});
 
-    test("still works when package.json cannot be found at all", async () => {
+// ─── Install layouts ────────────────────────────────────────────────────────
+//
+// The planted version is deliberately different from FALLBACK_VERSION:
+// asserting equality with the real version would pass even if the resolver
+// failed to match and silently returned the fallback.
+//
+// Mutation-checked: reverting version.ts to an exact `name === "b4mal"` match
+// makes the scoped and host-manifest tests below fail.
+
+describe("CLI --version across install layouts", () => {
+    test("reads the published scoped layout (node_modules/@bneb/b4mal/dist)", async () => {
+        scratch = mkdtempSync(join(tmpdir(), "b4mal-version-scoped-"));
+        const entry = layOut(scratch, ["node_modules", "@bneb", "b4mal"],
+            { name: "@bneb/b4mal", version: SENTINEL_VERSION });
+
+        const result = await runCli(entry, "--version", scratch);
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout.trim()).toBe(SENTINEL_VERSION);
+        expect(result.stdout.trim()).not.toBe(FALLBACK_VERSION);
+    });
+
+    test("reads an unscoped layout (node_modules/b4mal/dist)", async () => {
+        scratch = mkdtempSync(join(tmpdir(), "b4mal-version-unscoped-"));
+        const entry = layOut(scratch, ["node_modules", "b4mal"],
+            { name: "b4mal", version: SENTINEL_VERSION });
+
+        const result = await runCli(entry, "--version", scratch);
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout.trim()).toBe(SENTINEL_VERSION);
+    });
+
+    test("ignores an unrelated package.json on the way up", async () => {
+        // The resolver must match on the package NAME, not merely take the first
+        // package.json it finds — a host project's manifest sits directly above
+        // a nested install.
+        scratch = mkdtempSync(join(tmpdir(), "b4mal-version-host-"));
+        writeManifest(scratch, "some-host-app", "3.0.0");
+
+        const entry = layOut(scratch, ["node_modules", "@bneb", "b4mal"],
+            { name: "@bneb/b4mal", version: SENTINEL_VERSION });
+
+        const result = await runCli(entry, "--version", scratch);
+        expect(result.stdout.trim()).toBe(SENTINEL_VERSION);
+        expect(result.stdout.trim()).not.toBe("3.0.0");
+    });
+
+    test("degrades to the fallback when no manifest can be found", async () => {
         // No package.json anywhere above the entry: the compiled-in fallback
         // must be used rather than crashing.
         scratch = mkdtempSync(join(tmpdir(), "b4mal-version-orphan-"));
-        const orphan = join(scratch, "dist");
-        mkdirSync(orphan, { recursive: true });
-        cpSync(DIST_ENTRY, join(orphan, "index.js"));
+        const entry = layOut(scratch, ["dist"]);
 
-        const result = await runCli(join(orphan, "index.js"), "--version", scratch!);
+        const result = await runCli(entry, "--version", scratch);
         expect(result.exitCode).toBe(0);
         expect(result.stderr).not.toMatch(/UNHANDLED REJECTION/);
-        expect(result.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+        expect(result.stdout.trim()).toBe(FALLBACK_VERSION);
+    });
+
+    test("stops climbing rather than matching a manifest in a parent of the install", async () => {
+        // A manifest belonging to something else must never be adopted even when
+        // it is the nearest one.
+        scratch = mkdtempSync(join(tmpdir(), "b4mal-version-nearest-"));
+        writeManifest(scratch, "@bneb/not-b4mal", "9.9.9");
+
+        const entry = layOut(scratch, ["dist"]);
+        const result = await runCli(entry, "--version", scratch);
+        expect(result.stdout.trim()).toBe(FALLBACK_VERSION);
     });
 });
