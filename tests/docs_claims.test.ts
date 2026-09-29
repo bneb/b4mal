@@ -37,7 +37,7 @@ function markdownFiles(): string[] {
         }
     };
     walk(DOCS);
-    for (const f of ["README.md", "ARCHITECTURE.md", "BENCHMARKS.md", "COVERAGE.md"]) {
+    for (const f of ["README.md", "ARCHITECTURE.md", "BENCHMARKS.md", "COVERAGE.md", "ROADMAP.md"]) {
         const full = join(ROOT, f);
         if (existsSync(full)) out.push(full);
     }

@@ -79,6 +79,7 @@ Documented in some design notes in this repository, but **not implemented in the
 
 ## Documentation
 
+- [Roadmap](./ROADMAP.md) - Open work, and what is verified versus merely claimed.
 - [Core Engine](./src/core/README.md) - Deep dive into caching, validation, and formal verification.
 - [Orchestrator](./src/orchestrator/README.md) - Dynamic scheduling, DAG planning, and subprocess isolation.
 - [Architecture](./ARCHITECTURE.md) - Details on the internal engine mechanics and the DAG collision engine.

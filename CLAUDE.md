@@ -28,8 +28,8 @@ bun publish                       # Publish to npm (runs build + test first)
 bun run scripts/benchmark-init.ts # Test init against 35 real repos (scores GREEN/YELLOW/RED)
 cargo test --manifest-path crates/b4mal/Cargo.toml   # Rust integration crate
 
-# Sprint tracking
-# Active sprint: artifacts/plans/sprint-go-to-market.md
+# Roadmap
+# Open work: ROADMAP.md. artifacts/plans/ is a dated historical record — see its README.
 ```
 
 The project uses **Bun** as both runtime and package manager. `bun build` compiles TypeScript to `dist/`. There is no `npm`, no `node`, and no separate bundler.

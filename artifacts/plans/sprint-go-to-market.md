@@ -2,13 +2,19 @@
 
 Goal: Make b4mal discoverable, installable, and useful on first try for a stranger.
 
+> **Annotated 2026-09-29.** This checklist was ticked off optimistically. The four
+> items below are marked with their real status; the rest were verified. See
+> `ROADMAP.md` for current open work.
+
 ## 🔴 Immediate — unblock adoption (this week)
 
-- [x] **1. Publish to npm** ⚠️ **BLOCKED: npm token invalid (401). Run `npm login` and retry.**
-  - `bun publish` or `npm publish` so `npm install -g b4mal` works
-  - Verify the binary maps correctly (package.json `bin` field)
-  - Acceptance: `npx b4mal --version` works on a fresh machine
-  - Package.json prepped: bin→dist/index.js, files array added, prepublishOnly script added
+- [x] **1. Publish to npm** — ⚠️ **Was ticked while blocked. Actually completed 2026-09-29.**
+  - At the time of writing this carried its own annotation: "BLOCKED: npm token invalid (401)"
+  - Published as `@bneb/b4mal@0.1.1`, not `b4mal` — npm refuses the unscoped name as
+    too similar to the existing package `b4a`
+  - The binary maps correctly once installed: `bin` is `dist/index.js`, and
+    `npm install -g @bneb/b4mal` was verified to place a working `b4mal` on PATH
+  - Acceptance `npx b4mal --version` does not hold: the scope is required
 
 - [x] **2. Fix init for non-JS ecosystems (Rust, Go, Python)**
   - Current: 0/54 functional tasks for Rust repos (all `echo` placeholders)
@@ -36,10 +42,10 @@ Goal: Make b4mal discoverable, installable, and useful on first try for a strang
   - Target audience: CISO evaluating build tooling for regulated environment
   - Acceptance: `docs/security-model.md` exists and builds
 
-- [x] **7. Create README badge SVGs**
-  - `![built with b4mal](https://b4mal.dev/badge.svg)`
-  - Minimal SVG, renders well on GitHub dark/light mode
-  - Acceptance: badge renders correctly in README preview
+- [ ] **7. Create README badge SVGs** — ⚠️ **Not done. The URL in this item does not resolve.**
+  - Planned as `![built with b4mal](https://b4mal.dev/badge.svg)`
+  - `b4mal.dev` is NXDOMAIN, and no badge was ever added to the README
+  - Any badge needs a host that exists; the docs site is not deployed
 
 - [x] **8. Fix CLAUDE.md architecture diagram — add GTM context**
   - Current CLAUDE.md is purely technical. Add install/publish commands, docs commands, and the GTM plan pointer
@@ -52,10 +58,12 @@ Goal: Make b4mal discoverable, installable, and useful on first try for a strang
   - `b4mal check` reads lockfile, verifies task isolation, reports collisions and shadowing — no execution
   - Acceptance: `b4mal check` exits 0 on valid config, exits 1 with collision report on conflicts
 
-- [x] **10. Write migration case study (Turborepo → b4mal)** — wizard fixed, TurboMigrator v2+JSONC support, graceful fallback
-  - Pick vercel/turbo or another recognizable repo, run the wizard, document every step
-  - Include: before/after config, cache hit rates, build times, gotchas
-  - Acceptance: `docs/case-studies/turborepo-migration.md` exists and builds
+- [ ] **10. Write migration case study (Turborepo → b4mal)** — ⚠️ **Not done. The acceptance file was never written.**
+  - Wizard work landed (TurboMigrator v2 + JSONC support, graceful fallback)
+  - Acceptance was "`docs/case-studies/turborepo-migration.md` exists and builds" —
+    that directory does not exist
+  - The `vs-turborepo.md` page also describes no head-to-head benchmark, so there are
+    no measured numbers to put in a case study yet
 
 - [x] **11. Add VS Code extension scaffold**
   - Wraps the built-in LSP server for editor distribution
@@ -64,8 +72,9 @@ Goal: Make b4mal discoverable, installable, and useful on first try for a strang
 
 ## ⚪ Nice-to-have
 
-- [x] **12. Run benchmark-init.ts against all 33 repos — publish results**
-  - 35 repos tested: 31 GREEN (89%), 3 YELLOW (9%), 1 RED (3%)
-  - GREEN: all JS/TS, Rust, Go, Python repos — 100% functional commands
-  - YELLOW: shadcn-ui, date-fns, prisma — large file trees, AST discovery overload
-  - RED: vercel/turbo — JSON parse error on turbo.json (likely comment/trailing comma)
+- [x] **12. Run benchmark-init.ts against all 33 repos — publish results** — ⚠️ **Numbers below are stale; superseded.**
+  - Recorded at the time: 35 repos tested: 31 GREEN (89%), 3 YELLOW (9%), 1 RED (3%)
+  - The YELLOW list (shadcn-ui, date-fns, prisma) matches no later run
+  - Measured 2026-09-29: **35/35 GREEN, 598 of 598 functional tasks, 0 placeholders**
+  - `docs/guide/benchmark-results.md` carries the current figures, and
+    `.github/workflows/benchmark.yml` now re-runs this on a schedule
