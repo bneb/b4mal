@@ -14,6 +14,16 @@ export interface OrchestratorTask {
     deps: string[];     // Task IDs this task depends on
     reads?: string[];   // Filesystem paths read by the task
     writes?: string[];  // Filesystem paths written by the task
+    /**
+     * Environment variable NAMES the task reads (from the lockfile's
+     * `needsEnv`). These are passed to the EnvSanitizer and their values are
+     * hashed into the cache key — the architecture doc promises declared env
+     * values are cache inputs, and without them a changed variable produced a
+     * stale cache hit.
+     */
+    envReads?: string[];
+    /** Environment variable NAMES the task sets. */
+    envWrites?: string[];
     secrets?: string[]; // Secret names resolved at runtime (never hashed/logged)
     when?: { branch?: string; platform?: string[]; if?: string };
 }
@@ -38,10 +48,26 @@ export class WavePlanner {
         if (tasks.length === 0) return { tasks: new Map(), inDegree: new Map(), dependents: new Map(), waves: [] };
 
         const taskMap = new Map<string, OrchestratorTask>();
+
+        /**
+         * The planner's normalized view of each task's resource access.
+         *
+         * Kept SEPARATE from the task objects on purpose. Planning folds every
+         * `fs:` claim into both reads and writes, because a claim asserts
+         * "this task touches the path" without saying which way. Writing that
+         * normalization back onto `t.reads`/`t.writes` destroyed the author's
+         * declared distinction, and those objects are handed to the executor,
+         * which uses `reads` for the cache key and `writes` for artifact
+         * packing. The result was that declared *inputs* were treated as
+         * outputs: inputs were archived as artifacts and excluded from cache
+         * keys, so editing a source file could still produce a cache hit.
+         */
+        const accessMap = new Map<string, { reads: string[]; writes: string[] }>();
+
         for (const t of tasks) {
             const readClaims = new Set<string>();
             const writeClaims = new Set<string>();
-            
+
             if (t.reads) t.reads.forEach(r => readClaims.add(path.normalize(r.replace(/^fs:/, ""))));
             if (t.writes) t.writes.forEach(w => writeClaims.add(path.normalize(w.replace(/^fs:/, ""))));
             if (t.claims) {
@@ -55,9 +81,11 @@ export class WavePlanner {
                     }
                 });
             }
-            t.reads = Array.from(readClaims);
-            t.writes = Array.from(writeClaims);
-            t.claims = Array.from(new Set([...t.reads.map(r => `fs:${r}`), ...t.writes.map(w => w.includes(":") ? w : `fs:${w}`)]));
+
+            accessMap.set(t.id, {
+                reads: Array.from(readClaims),
+                writes: Array.from(writeClaims),
+            });
             taskMap.set(t.id, t);
         }
 
@@ -114,13 +142,14 @@ export class WavePlanner {
                     return fB.volatilityScore - fA.volatilityScore;
                 });
             }
-            const subWaves = this.splitByClaims(group, taskMap);
+            const subWaves = this.splitByClaims(group, accessMap);
             for (const sw of subWaves) {
                 waves.push({ depth: waves.length, taskIds: sw });
 
                 for (const curr of sw) {
-                    const taskReads = taskMap.get(curr)!.reads || [];
-                    const taskWrites = taskMap.get(curr)!.writes || [];
+                    const access = accessMap.get(curr)!;
+                    const taskReads = access.reads;
+                    const taskWrites = access.writes;
                     
                     // Inject synthetic dependencies to serialize across ALL overlapping tasks
                     for (let j = lastAccessors.length - 1; j >= 0; j--) {
@@ -179,14 +208,14 @@ export class WavePlanner {
      */
     private static splitByClaims(
         taskIds: string[],
-        taskMap: Map<string, OrchestratorTask>
+        accessMap: Map<string, { reads: string[]; writes: string[] }>
     ): string[][] {
         const subWaves: { ids: string[]; reads: Set<string>; writes: Set<string> }[] = [];
 
         for (const id of taskIds) {
-            const task = taskMap.get(id)!;
-            const taskReads = task.reads || [];
-            const taskWrites = task.writes || [];
+            const access = accessMap.get(id)!;
+            const taskReads = access.reads;
+            const taskWrites = access.writes;
 
             // Try to fit into an existing sub-wave
             let placed = false;
