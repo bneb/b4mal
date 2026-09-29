@@ -234,7 +234,8 @@ describe("WaveExecutor - Edge Cases", () => {
         expect(results.length).toBe(1);
         // Bun.spawn with missing binary returns exitCode != 0 on some
         // platforms, or may reject. Either way we get a result.
-        expect(results[0].taskId || results[0].id).toBeDefined();
+        expect(results[0].taskId).toBe("bad");
+        expect(results[0].exitCode).not.toBe(0);
     });
 });
 

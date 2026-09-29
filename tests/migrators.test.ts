@@ -73,8 +73,13 @@ describe("Zero-Config Migrators", () => {
         
         const tasks = NpmMigrator.migrate(tmp);
         expect(tasks.length).toBe(2);
-        expect(tasks.find(t => t.id === "lint")?.cmd).toEqual(["npm", "run", "lint"]);
-        
+
+        const lint = tasks.find(t => t.id === "lint");
+        expect(lint?.cmd.slice(0, 3)).toEqual(["npm", "run", "lint"]);
+        // --prefix pins the script to the package's own directory, because
+        // B4mal executes tasks with cwd set to the project root.
+        expect(lint?.cmd.slice(3)).toEqual(["--prefix", path.dirname(tmp)]);
+
         await fs.unlink(tmp).catch(()=>{});
     });
 });
