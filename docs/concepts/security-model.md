@@ -83,6 +83,6 @@ This prevents implicit environment dependencies — a task can't accidentally de
 1. **Use a dedicated S3 bucket** with object versioning enabled and write-once-read-many policies
 2. **Rotate AWS credentials** used for the L2 cache regularly
 3. **Enable S3 access logging** to detect cache poisoning attempts
-4. **Pin B4mal versions** in CI — `npm i -g b4mal@0.1.0` rather than `@latest`
+4. **Pin B4mal versions** in CI — `npm i -g @bneb/b4mal@0.1.0` rather than `@latest`
 5. **Run `b4mal shadow`** in CI to detect deterministic overwrites before they reach production
 6. **Archive isolation attestations** alongside build logs for compliance audits

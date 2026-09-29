@@ -43,7 +43,7 @@ export default defineConfig({
     ],
     search: { provider: "local" },
     footer: {
-      message: "Released under the B4mal License.",
+      message: "Released under the MIT License.",
     },
   },
 });

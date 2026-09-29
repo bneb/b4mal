@@ -9,7 +9,7 @@ curl -fsSL https://b4mal.dev/install.sh | bash
 Or via Bun:
 
 ```bash
-bun install -g b4mal
+bun install -g @bneb/b4mal
 ```
 
 ## Windows
@@ -17,7 +17,7 @@ bun install -g b4mal
 ### Via Bun (recommended)
 
 ```bash
-bun install -g b4mal
+bun install -g @bneb/b4mal
 ```
 
 ### Via Scoop

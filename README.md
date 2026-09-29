@@ -23,10 +23,10 @@ If two tasks declare intersecting resource modifications without an explicit dep
 The CLI runs on the [Bun](https://bun.sh) runtime, and the published entry point is a Bun script — **install Bun first**, whichever installer you use.
 
 ```bash
-bun install -g b4mal
+bun install -g @bneb/b4mal
 ```
 
-`npm install -g b4mal` also works for placing the binary on your `PATH`, but Bun must still be available at runtime.
+`npm install -g @bneb/b4mal` also works for placing the binary on your `PATH`, but Bun must still be available at runtime.
 
 ## Quick Start
 

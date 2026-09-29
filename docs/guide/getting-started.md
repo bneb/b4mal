@@ -18,7 +18,7 @@ curl -fsSL https://b4mal.dev/install.sh | bash
 Or via Bun:
 
 ```bash
-bun install -g b4mal
+bun install -g @bneb/b4mal
 ```
 
 ### 2. Initialize
