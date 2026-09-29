@@ -33,6 +33,16 @@ export interface WaveConflict {
     taskB: string;
     resources: string[];
     counterexample?: string;
+    /**
+     * How the two tasks are ordered relative to each other:
+     *  - "declared": a dependency chain exists in the lockfile.
+     *  - "implicit": no declared chain exists; the WavePlanner serializes the
+     *    pair by synthesizing an edge during planning. The overwrite is still
+     *    deterministic, but the ordering is not stated by the author.
+     */
+    ordering?: "declared" | "implicit";
+    /** "shadow" = write/write masking. "implicit-dependency" = undeclared read-after-write. */
+    kind?: "shadow" | "implicit-dependency";
 }
 
 export interface WaveResult {
@@ -210,34 +220,106 @@ export class FormalShadow {
 
     /**
      * Identify "Shadowing" conflicts — where one task's write is deterministically
-     * masked by a downstream task's write.
+     * masked by another task's write.
+     *
+     * IMPORTANT: this audits *every unordered pair* of tasks, not only pairs that
+     * are already linked by a dependency chain. Two independent tasks that declare
+     * the same output never appear in each other's transitive dependency set, yet
+     * one of them is guaranteed to overwrite the other — the WavePlanner serializes
+     * them with a synthetic edge, so the overwrite is deterministic but silent.
+     * Auditing only declared chains reports "no shadowing" for exactly that case.
+     *
+     * For each overlapping pair the result records whether the ordering was
+     * `declared` in the lockfile or merely `implicit` (synthesized at plan time).
      */
     static async detectShadowing(
         tasks: TaskResourceClaim[],
         dependencies: Map<string, string[]>
     ): Promise<WaveConflict[]> {
         const shadows: WaveConflict[] = [];
-        const taskMap = new Map(tasks.map(t => [t.id, t]));
 
-        for (const task of tasks) {
-            const transitives = this.getTransitiveDependencies(task.id, dependencies);
-            for (const depId of transitives) {
-                const dep = taskMap.get(depId);
-                if (!dep) continue;
+        // Declared ancestry, computed once per task and cached.
+        const ancestry = new Map<string, Set<string>>();
+        const ancestorsOf = (id: string): Set<string> => {
+            let cached = ancestry.get(id);
+            if (!cached) {
+                cached = this.getTransitiveDependencies(id, dependencies);
+                ancestry.set(id, cached);
+            }
+            return cached;
+        };
 
-                if (task.writes.length > 0 && dep.writes.length > 0) {
-                    const taskWrites = task.writes.map(w => `fs:${w}`);
-                    const depWrites = dep.writes.map(w => `fs:${w}`);
-                    const conflict = this.checkOverlap(taskWrites, depWrites);
+        // Deterministic iteration order: sort by id so output is stable.
+        const ordered = [...tasks].sort((a, b) => a.id.localeCompare(b.id));
 
-                    if (conflict) {
-                        shadows.push({
-                            taskA: dep.id,
-                            taskB: task.id,
-                            resources: [conflict.replace(/^fs:/, "").replace(/^env:/, "")],
-                            counterexample: `Deterministic shadow: ${task.id} overwrites ${dep.id} at ${conflict}`,
-                        });
+        for (let i = 0; i < ordered.length; i++) {
+            for (let j = i + 1; j < ordered.length; j++) {
+                const first = ordered[i];
+                const second = ordered[j];
+
+                const firstWrites = first.writes.map(w => `fs:${w}`);
+                const secondWrites = second.writes.map(w => `fs:${w}`);
+                const firstReads = first.reads.map(r => `fs:${r}`);
+                const secondReads = second.reads.map(r => `fs:${r}`);
+
+                // ── write/write: one task's declared output is masked ──────
+                const writeConflict = this.checkOverlap(firstWrites, secondWrites);
+
+                if (writeConflict) {
+                    const firstBeforeSecond = ancestorsOf(second.id).has(first.id);
+                    const secondBeforeFirst = ancestorsOf(first.id).has(second.id);
+
+                    let upstream: TaskResourceClaim;
+                    let downstream: TaskResourceClaim;
+                    let ordering: "declared" | "implicit";
+
+                    if (firstBeforeSecond) {
+                        upstream = first; downstream = second; ordering = "declared";
+                    } else if (secondBeforeFirst) {
+                        upstream = second; downstream = first; ordering = "declared";
+                    } else {
+                        // No declared chain: the planner will serialize them.
+                        // Report the pair in stable id order.
+                        upstream = first; downstream = second; ordering = "implicit";
                     }
+
+                    shadows.push({
+                        taskA: upstream.id,
+                        taskB: downstream.id,
+                        resources: [writeConflict.replace(/^fs:/, "").replace(/^env:/, "")],
+                        counterexample: ordering === "declared"
+                            ? `Deterministic shadow: ${downstream.id} overwrites ${upstream.id} at ${writeConflict}`
+                            : `Deterministic shadow: ${downstream.id} overwrites ${upstream.id} at ${writeConflict} (no declared dependency; ordering is synthesized by the planner)`,
+                        ordering,
+                        kind: "shadow",
+                    });
+                    continue;
+                }
+
+                // ── read/write without a declared edge: an implicit dependency ──
+                // The README states B4mal "completely rejects implicit
+                // dependencies", so an undeclared producer/consumer pair is a
+                // defect in the DAG even though the planner serializes it safely.
+                const readAfterWrite =
+                    this.checkOverlap(firstReads, secondWrites) ??
+                    this.checkOverlap(secondReads, firstWrites);
+
+                if (readAfterWrite) {
+                    const firstBeforeSecond = ancestorsOf(second.id).has(first.id);
+                    const secondBeforeFirst = ancestorsOf(first.id).has(second.id);
+                    if (firstBeforeSecond || secondBeforeFirst) continue;
+
+                    const producer = this.checkOverlap(firstReads, secondWrites) ? second : first;
+                    const consumer = producer === first ? second : first;
+
+                    shadows.push({
+                        taskA: producer.id,
+                        taskB: consumer.id,
+                        resources: [readAfterWrite.replace(/^fs:/, "").replace(/^env:/, "")],
+                        counterexample: `Implicit dependency: ${consumer.id} reads ${readAfterWrite} produced by ${producer.id}, but no dependency edge is declared`,
+                        ordering: "implicit",
+                        kind: "implicit-dependency",
+                    });
                 }
             }
         }
