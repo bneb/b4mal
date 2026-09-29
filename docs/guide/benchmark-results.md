@@ -2,35 +2,30 @@
 
 `b4mal init` tested against 35 real open-source repositories across 5 ecosystems.
 
-**34/35 GREEN (97%).** One repository is YELLOW; none failed.
-
 | Status | Repos |
 |--------|-------|
-| GREEN (lockfile with functional commands) | 34 (97%) |
-| YELLOW (partial or unusable output) | 1 (3%) |
+| GREEN (lockfile with functional commands) | 35 (100%) |
+| YELLOW (partial or unusable output) | 0 |
 | RED (init failed) | 0 |
 
 | Metric | Value |
 |--------|-------|
-| Total tasks generated | 1153 |
-| Functional commands | 588 (51%) |
+| Total tasks generated | 598 |
+| Functional commands | 598 (100%) |
 | Placeholder commands | 0 |
 
-The 51% figure is not spread across the suite: every repository except one generates
-100% functional commands. All 565 non-functional tasks come from a single repo —
-see [Known gap](#known-gap-tanstackquery) below.
+These are measured values rather than a headline: run the command below and compare.
+The script exits non-zero whenever any repository is not GREEN, so it doubles as a
+check.
 
 ## All 35 repos
-
-Measured with `bun run scripts/benchmark-init.ts --max 35`. Task counts move as the
-upstream repositories change; these were taken in a single run.
 
 | Repo | Tasks | Status |
 |------|-------|--------|
 | colinhacks/zod | 26 | GREEN |
 | vitest-dev/vitest | 31 | GREEN |
 | changesets/changesets | 21 | GREEN |
-| **TanStack/query** | **565** | **YELLOW** |
+| TanStack/query | 10 | GREEN |
 | pmndrs/zustand | 25 | GREEN |
 | remix-run/react-router | 33 | GREEN |
 | shadcn-ui/ui | 16 | GREEN |
@@ -63,13 +58,20 @@ upstream repositories change; these were taken in a single run.
 | vercel/turbo | 14 | GREEN |
 | nrwl/nx | 20 | GREEN |
 
-## Known gap: TanStack/query
+Task counts move as the upstream repositories change; these come from a single run.
 
-`init` discovers 565 tasks and produces **no functional commands and no
-placeholders either** — a large but useless lockfile. Every other repository is
-unaffected. This is the only thing standing between the suite and 35/35, and it
-looks like a genuine defect in discovery rather than a cosmetic task-count
-difference.
+## What the numbers depend on
+
+`init` migrates an existing build config when it finds one — `turbo.json`, `nx.json`
+or `lerna.json` ahead of `package.json` scripts. If migration throws, the wizard
+falls back to AST discovery, which emits one placeholder task per source file. That
+fallback is why this page previously reported 34/35: `TanStack/query`'s `nx.json`
+uses the object form of `dependsOn`, the migrator crashed on it, and the fallback
+produced 565 placeholder tasks for a lockfile that could not build anything. The
+migrator handles both shapes now — see `tests/init_migration.test.ts`.
+
+A repository whose config is not recognised will still land on the AST path. If a
+run here drops below 35/35, that gap is where to look first.
 
 ## How to reproduce
 
@@ -77,5 +79,4 @@ difference.
 bun run scripts/benchmark-init.ts --max 35     # add --keep to retain the clones and JSON report
 ```
 
-Generates `benchmark-report.json` with per-repo status, task counts and timing. It
-exits non-zero when any repository is not GREEN, so it is usable as a check.
+Generates `benchmark-report.json` with per-repo status, task counts and timing.

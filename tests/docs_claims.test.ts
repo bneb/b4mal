@@ -232,8 +232,16 @@ describe("docs claims: no references to an unregistered domain", () => {
 
 describe("docs claims: banned overclaim phrasing", () => {
     /**
-     * Phrases that were shipped and were not true. Each is a thing that has to be
-     * earned with evidence, not asserted:
+     * Phrases that were shipped as headlines and were not true at the time.
+     *
+     * These are banned as *unsourced slogans*, not because the underlying facts are
+     * impossible — the benchmark result is now genuinely 35/35 (see
+     * docs/guide/benchmark-results.md). The failure mode being guarded against is
+     * asserting a result instead of measuring it: the same sentence was on the page
+     * when the measured figure was 34/35 and 51% functional.
+     *
+     * So: state measured values in a table, next to the command that reproduces
+     * them. Do not assert the slogan.
      *
      *  - "mathematically proven" / "formally proves"  — path-disjointness is a
      *    decidable check over *declared* claims; undeclared access defeats it.
@@ -241,8 +249,8 @@ describe("docs claims: banned overclaim phrasing", () => {
      *    unkeyed SHA-256 digest; the signature field is an explicit placeholder.
      *  - "provably correct"                           — cache correctness is
      *    conditional on complete declarations.
-     *  - "100% GREEN" / "zero placeholders"           — measured at 34/35 and
-     *    51% functional; see docs/guide/benchmark-results.md.
+     *  - "100% GREEN" / "zero placeholders"           — headline forms of a
+     *    benchmark result; report the numbers instead.
      *  - "Real-Time Dashboard"                        — the TUI HUD is not wired
      *    into the CLI; `analyze` writes a static HTML report.
      */
