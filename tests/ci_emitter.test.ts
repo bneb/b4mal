@@ -57,7 +57,7 @@ describe("CIEmitter (GitHub Actions)", () => {
         expect(yaml).toContain("Install B4mal");
         // Pin global installations to prevent supply chain attacks
         // It should match semver or a valid tag, we test it doesn't just use @latest
-        expect(yaml).toMatch(/npm i -g b4mal@\d+\.\d+\.\d+/);
+        expect(yaml).toMatch(/npm i -g @bneb\/b4mal@\d+\.\d+\.\d+/);
     });
 
     test("infers toolchains based on directory contents (Node.js)", () => {
@@ -106,7 +106,7 @@ describe("CIEmitter (GitHub Actions)", () => {
 
     test("falls back to latest when package.json cannot be read", () => {
         const yaml = CIEmitter.emitGithubActions();
-        expect(yaml).toContain("npm i -g b4mal@");
+        expect(yaml).toContain("npm i -g @bneb/b4mal@");
     });
 });
 

@@ -58,7 +58,7 @@ ${toolchain}
           ${deps}
 
       - name: Install B4mal
-        run: npm i -g b4mal@${version}
+        run: npm i -g @bneb/b4mal@${version}
 
       - name: Restore B4mal Global Cache
         uses: actions/cache@v4
