@@ -24,10 +24,16 @@ does not supply a runtime — Bun still has to be installed.
 bun install -g @bneb/b4mal
 ```
 
-**Untested.** No prebuilt Windows binary is published, and the artifact vault shells
-out to `tar` and `zstd`, which are not present by default on Windows — so L1 caching
-will degrade to re-execution there. Build execution itself is expected to work under
-Bun, but it has not been verified.
+**Smoke-tested, with caveats.** A `windows-latest` CI job runs `scripts/smoke-windows.ts`,
+which exercises `--version`, `--help`, `attest`, a two-task build with a declared
+dependency, and `check`, using only `bun -e` for task commands. All of that passes on
+Windows.
+
+What that does not cover: the test suite itself (it uses `sh -c` throughout, so it
+cannot run there), and L1 caching. The artifact vault shells out to `tar` and `zstd`;
+Windows ships the former but not the latter, so packing fails and each run re-executes
+rather than restoring from cache. No prebuilt Windows binary is published either — the
+release matrix builds Linux and macOS only.
 
 ## Docker
 
@@ -43,9 +49,9 @@ use `@bneb/b4mal`.
 
 | Feature | macOS | Linux | Windows |
 |---------|-------|-------|---------|
-| Build execution | ✅ tested | ✅ tested (CI) | ⚠️ untested |
-| Cache (L1) | ✅ | ✅ | ⚠️ needs `tar` + `zstd` |
-| Remote cache (L2) | ⚠️ wired, untested | ⚠️ wired, untested | ⚠️ untested |
+| Build execution | ✅ tested | ✅ tested (CI) | ✅ smoke-tested (CI) |
+| Cache (L1) | ✅ | ✅ | ❌ needs `zstd` |
+| Remote cache (L2) | ⚠️ verified against a stub only | ⚠️ verified against a stub only | ⚠️ same |
 | Trace synthesis | ❌ (SIP) | ✅ (strace/eBPF) | ❌ |
 
 There is no failure sandbox on any platform — failed tasks leave their partial writes

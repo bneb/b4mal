@@ -90,7 +90,22 @@ if (existsSync(join(root, "out", "a.txt"))) {
 
 const again = await cli(["build"], root);
 check("second build exits 0", again.exitCode === 0, again.output.slice(-300));
-check("second build reports a cache hit", /cache hits/.test(again.output), again.output.slice(-200));
+
+// The cache assertion depends on the platform. The artifact vault shells out to
+// `tar` and `zstd`; Windows runners ship the former (bsdtar) but not the latter,
+// so packing fails there and every run re-executes. Asserting merely that the
+// output mentions "cache hits" would pass on 0 hits and prove nothing — so the
+// count is checked where packing is possible, and reported either way.
+const hits = Number(/(\d+) cache hits/.exec(again.output)?.[1] ?? "-1");
+const canPack = Boolean(Bun.which("tar")) && Boolean(Bun.which("zstd"));
+if (canPack) {
+    check("second build reports a cache hit", hits >= 1, `reported ${hits}`);
+} else {
+    console.log(
+        `  skip  cache assertion — tar=${Bun.which("tar") ?? "absent"}, ` +
+        `zstd=${Bun.which("zstd") ?? "absent"}; reported ${hits} hits`,
+    );
+}
 
 // ── The audit ──────────────────────────────────────────────────────────────
 const audit = await cli(["check"], root);
