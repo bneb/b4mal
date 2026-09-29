@@ -4,10 +4,9 @@ version = "0.1.0"
 edition = "2021"
 description = "B4mal Rust integration — resource attestation and workspace discovery"
 
-[dependencies]
-syn = { version = "2", features = ["full", "visit"] }
-proc-macro2 = "1"
-quote = "1"
+# No dependencies on purpose: this crate shells out to the `b4mal` binary rather
+# than duplicating its logic. It previously declared syn/quote/proc-macro2 for a
+# `b4mal_attest!` proc macro that was never written, and nothing used them.
 
 [lib]
 name = "b4mal"

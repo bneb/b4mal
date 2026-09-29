@@ -56,3 +56,15 @@ jobs:
       # job's `bun test`. This job catches what that cannot: broken frontmatter,
       # invalid containers and dead internal routes, which only fail at render.
       - run: bun run docs:build
+
+  rust-crate:
+    name: Rust crate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # crates/b4mal had never been built by anything. It compiled locally but
+      # nothing would have noticed if it stopped: no CI job, no test, no import
+      # from the TypeScript side.
+      - run: cargo test --manifest-path crates/b4mal/Cargo.toml

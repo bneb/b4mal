@@ -1,9 +1,16 @@
 //! B4mal Rust integration crate.
 //!
 //! Provides:
-//! - `b4mal_attest!` macro for resource declaration at compile time
-//! - Cargo workspace auto-discovery helpers
-//! - AST-normalized hashing for Rust source files
+//! - `is_available()` — whether a `b4mal` binary is on the PATH
+//! - `attest()` — declare a task's resource claims and get a normalized claim back
+//! - `discover_workspace_members()` — read `[workspace] members` from a Cargo.toml
+//!
+//! This crate deliberately has no dependencies: it shells out to the `b4mal`
+//! binary rather than reimplementing its logic, so it stays in step with the CLI
+//! instead of drifting from it.
+//!
+//! Note: there is no `b4mal_attest!` proc macro. That was planned and never
+//! built; the previous doc comment described it as if it existed.
 
 use std::process::Command;
 
@@ -16,8 +23,11 @@ pub fn is_available() -> bool {
         .unwrap_or(false)
 }
 
-/// Run `b4mal attest` with the given resource claims.
-/// Returns the attestation output on success.
+/// Run `b4mal attest` with the given resource claims and return its JSON output.
+///
+/// Claims use the CLI's protocol prefixes, e.g. `fs:read:src`, `fs:write:dist`,
+/// `env:NODE_ENV`, `port:8080`. Returns `Err` with the CLI's stderr when the
+/// declaration is rejected, so callers can surface the reason.
 pub fn attest(claims: &[&str]) -> Result<String, String> {
     let output = Command::new("b4mal")
         .arg("attest")
@@ -34,6 +44,10 @@ pub fn attest(claims: &[&str]) -> Result<String, String> {
 
 /// Discover Cargo workspace members by parsing `Cargo.toml`.
 /// Returns a list of member crate paths relative to the workspace root.
+///
+/// This reads the `members` array only, and only in its single-line form. A
+/// multi-line array or a `members = ["a"]` split across lines is not
+/// understood; use a proper TOML parser if that matters.
 pub fn discover_workspace_members(workspace_root: &str) -> Vec<String> {
     let cargo_path = std::path::Path::new(workspace_root).join("Cargo.toml");
     if !cargo_path.exists() {
@@ -43,13 +57,8 @@ pub fn discover_workspace_members(workspace_root: &str) -> Vec<String> {
     let content = std::fs::read_to_string(&cargo_path).unwrap_or_default();
     let mut members = Vec::new();
 
-    // Simple parser for workspace.members in Cargo.toml
-    let in_workspace = false;
     for line in content.lines() {
         let trimmed = line.trim();
-        if trimmed == "[workspace]" {
-            continue;
-        }
         if trimmed.starts_with("members") {
             let list = trimmed
                 .split('=')
