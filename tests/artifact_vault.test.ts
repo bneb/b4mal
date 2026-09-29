@@ -133,3 +133,85 @@ describe("ArtifactVault — Edge Cases", () => {
         await fs.rm(projectRoot, { recursive: true, force: true });
     });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// § 3 — Regressions
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("ArtifactVault — Regressions", () => {
+    test("re-packing an existing hash overwrites instead of failing", async () => {
+        // `zstd -o <existing>` refuses to overwrite when stdin is a pipe
+        // ("already exists; stdin is an input - not proceeding"), which made
+        // re-packing any hash impossible: a task whose output changed could
+        // never refresh its archive, and the ledger entry kept pointing at
+        // stale content.
+        const projectRoot = path.join(os.tmpdir(), "b4mal-vault-repack-" + Date.now());
+        await fs.mkdir(path.join(projectRoot, "out"), { recursive: true });
+
+        const logicHash = "repack_test_" + Date.now();
+        const target = path.join(projectRoot, "out", "value.txt");
+
+        await fs.writeFile(target, "first");
+        await ArtifactVault.pack(logicHash, projectRoot, ["out"]);
+        expect(ArtifactVault.hasArtifact(logicHash, projectRoot)).toBe(true);
+
+        // Second pack of the SAME hash must succeed.
+        await fs.writeFile(target, "second");
+        await expect(ArtifactVault.pack(logicHash, projectRoot, ["out"])).resolves.toBeUndefined();
+
+        // And the archive must contain the newer content.
+        await fs.writeFile(target, "clobbered");
+        await ArtifactVault.unpack(logicHash, projectRoot);
+        expect(await fs.readFile(target, "utf-8")).toBe("second");
+
+        await ArtifactVault.remove(logicHash, projectRoot);
+        await fs.rm(projectRoot, { recursive: true, force: true });
+    });
+
+    test("unpack restores content without crashing the process", async () => {
+        // Regression: unpack piped `zstd --stdout` into `tar`. tar stops reading
+        // at the end-of-archive marker, the pipe closed under zstd, and the EPIPE
+        // surfaced as an UNHANDLED rejection that killed the whole CLI.
+        const projectRoot = path.join(os.tmpdir(), "b4mal-vault-unpack-" + Date.now());
+        await fs.mkdir(path.join(projectRoot, "out"), { recursive: true });
+
+        const logicHash = "unpack_epipe_test_" + Date.now();
+
+        for (let i = 0; i < 25; i++) {
+            await fs.writeFile(path.join(projectRoot, "out", `f${i}.txt`), `content-${i}\n`.repeat(50));
+        }
+        await ArtifactVault.pack(logicHash, projectRoot, ["out"]);
+
+        // Delete the originals so a successful restore is observable.
+        await fs.rm(path.join(projectRoot, "out"), { recursive: true, force: true });
+
+        await expect(ArtifactVault.unpack(logicHash, projectRoot)).resolves.toBeUndefined();
+        expect(await fs.readFile(path.join(projectRoot, "out", "f7.txt"), "utf-8"))
+            .toBe("content-7\n".repeat(50));
+
+        // No scratch tarball may be left behind next to the archive.
+        const archivePath = ArtifactVault.getArchivePath(logicHash, projectRoot);
+        const leftovers = (await fs.readdir(path.dirname(archivePath)))
+            .filter(name => name.includes(".unpack-") || name.includes(".pack-"));
+        expect(leftovers).toEqual([]);
+
+        await ArtifactVault.remove(logicHash, projectRoot);
+        await fs.rm(projectRoot, { recursive: true, force: true });
+    });
+
+    test("a failed pack leaves no partial archive behind", async () => {
+        const projectRoot = path.join(os.tmpdir(), "b4mal-vault-partial-" + Date.now());
+        await fs.mkdir(projectRoot, { recursive: true });
+
+        const logicHash = "partial_test_" + Date.now();
+
+        // Declared path does not exist, so tar fails.
+        await expect(
+            ArtifactVault.pack(logicHash, projectRoot, ["does-not-exist.txt"])
+        ).rejects.toThrow(/Pack failed/);
+
+        expect(ArtifactVault.hasArtifact(logicHash, projectRoot)).toBe(false);
+
+        await fs.rm(projectRoot, { recursive: true, force: true });
+    });
+});

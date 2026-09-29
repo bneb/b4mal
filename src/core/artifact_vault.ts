@@ -159,7 +159,18 @@ export class ArtifactVault {
                 stderr: "pipe",
             });
 
-            const zstdProc = Bun.spawn(["zstd", "-T0", "-o", archivePath], {
+            // Write to a scratch path and rename into place only on success.
+            //
+            // Two reasons this is not written straight to `archivePath`:
+            //  1. `zstd -o <existing>` refuses to overwrite when stdin is a pipe
+            //     ("already exists; stdin is an input - not proceeding"), which
+            //     made re-packing an existing hash impossible.
+            //  2. A crash or failure mid-write would otherwise leave a truncated
+            //     archive at the content-addressed path, which a later cache hit
+            //     would happily "restore" as corrupt output.
+            const scratchPath = `${archivePath}.pack-${process.pid}-${Date.now()}.tmp`;
+
+            const zstdProc = Bun.spawn(["zstd", "-T0", "-f", "-o", scratchPath], {
                 stdin: tarProc.stdout,
                 stdout: "pipe",
                 stderr: "pipe",
@@ -170,8 +181,11 @@ export class ArtifactVault {
             if (tarExit !== 0 || zstdExit !== 0) {
                 const tarErr = await new Response(tarProc.stderr).text();
                 const zstdErr = await new Response(zstdProc.stderr).text();
+                try { fs.rmSync(scratchPath, { force: true }); } catch { /* best effort */ }
                 throw new Error(`Pack failed. tar: ${tarExit} (${tarErr.trim()}), zstd: ${zstdExit} (${zstdErr.trim()})`);
             }
+
+            fs.renameSync(scratchPath, archivePath);
         } finally {
             if (projectRoot) {
                 fs.rmSync(stageDir, { recursive: true, force: true });
@@ -182,7 +196,15 @@ export class ArtifactVault {
     /**
      * Restore a zstd archive into the project root.
      *
-     * Uses Bun's subprocess piping: zstd | tar
+     * Decompresses to a temporary tarball first, then verifies and extracts it
+     * with plain file-based `tar` invocations.
+     *
+     * This deliberately avoids piping `zstd --stdout` into `tar`. In that
+     * arrangement tar stops reading as soon as it sees the end-of-archive
+     * marker, closing the pipe while zstd is still writing; the resulting EPIPE
+     * surfaces as an *unhandled* rejection (the inner child's stream is never
+     * drained) and takes down the whole CLI process. Decompressing to a file
+     * also means the archive is decompressed once instead of twice.
      */
     static async unpack(
         logicHash: string,
@@ -194,46 +216,76 @@ export class ArtifactVault {
             throw new Error(`Artifact archive not found for hash: ${logicHash}`);
         }
 
-        // List archive contents and verify no path traversal before extracting.
-        // macOS bsdtar extracts ../ entries by default; GNU tar >= 1.29 blocks them,
-        // but we verify explicitly for defense in depth across all platforms.
-        const listProc = Bun.spawn(
-            ["tar", "-tf", "-"],
-            { stdin: Bun.spawn(["zstd", "-d", archivePath, "--stdout"]).stdout, stdout: "pipe", stderr: "pipe" },
-        );
-        const listOutput = await new Response(listProc.stdout).text();
-        await listProc.exited;
-
         const fs = require("fs");
         const path = require("path");
-        // Realpath resolves macOS /tmp → /private/tmp symlinks so boundary
-        // checks compare canonical paths, not mixed symlink/resolved pairs.
-        const resolvedRoot = fs.realpathSync(path.resolve(projectRoot));
 
-        for (const entry of listOutput.trim().split("\n")) {
-            if (!entry) continue;
-            const normalized = entry.replace(/^\.\//, "");
-            if (normalized.startsWith("/") || normalized.includes("..")) {
-                throw new Error(`Unpack rejected: archive contains unsafe path "${entry}"`);
+        // Keep the scratch tarball beside the archive: if we could write the
+        // archive there, we can write this there, so we never depend on an
+        // ambient temp directory being writable.
+        const tarPath = `${archivePath}.unpack-${process.pid}-${Date.now()}.tar`;
+
+        try {
+            const decompressProc = Bun.spawn(["zstd", "-d", "-f", archivePath, "-o", tarPath], {
+                stdout: "pipe",
+                stderr: "pipe",
+            });
+            const decompressErr = await new Response(decompressProc.stderr).text();
+            const decompressCode = await decompressProc.exited;
+
+            if (decompressCode !== 0) {
+                throw new Error(`Unpack failed: zstd exited ${decompressCode} (${decompressErr.trim()})`);
             }
-            // Resolve against the real (canonical) root so the prefix check
-            // works on macOS where /tmp is a symlink to /private/tmp.
-            const resolved = path.resolve(resolvedRoot, normalized);
-            if (!resolved.startsWith(resolvedRoot + path.sep) && resolved !== resolvedRoot) {
-                throw new Error(`Unpack rejected: path "${entry}" escapes project root`);
+
+            // List archive contents and verify no path traversal before extracting.
+            // macOS bsdtar extracts ../ entries by default; GNU tar >= 1.29 blocks them,
+            // but we verify explicitly for defense in depth across all platforms.
+            const listProc = Bun.spawn(["tar", "-tf", tarPath], {
+                stdout: "pipe",
+                stderr: "pipe",
+            });
+            const listOutput = await new Response(listProc.stdout).text();
+            const listCode = await listProc.exited;
+
+            if (listCode !== 0) {
+                const listErr = await new Response(listProc.stderr).text();
+                throw new Error(`Unpack failed: could not list archive (${listErr.trim()})`);
             }
-        }
 
-        // Extract: zstd decompress into tar for extraction
-        const extractProc = Bun.spawn(
-            ["tar", "-xf", "-", "-C", projectRoot],
-            { stdin: Bun.spawn(["zstd", "-d", archivePath, "--stdout"]).stdout, stdout: "pipe", stderr: "pipe" },
-        );
-        const extractErr = await new Response(extractProc.stderr).text();
-        const extractCode = await extractProc.exited;
+            // Realpath resolves macOS /tmp → /private/tmp symlinks so boundary
+            // checks compare canonical paths, not mixed symlink/resolved pairs.
+            const resolvedRoot = fs.realpathSync(path.resolve(projectRoot));
 
-        if (extractCode !== 0) {
-            throw new Error(`Unpack failed: tar exited ${extractCode} (${extractErr.trim()})`);
+            for (const entry of listOutput.trim().split("\n")) {
+                if (!entry) continue;
+                const normalized = entry.replace(/^\.\//, "");
+                if (normalized.startsWith("/") || normalized.includes("..")) {
+                    throw new Error(`Unpack rejected: archive contains unsafe path "${entry}"`);
+                }
+                // Resolve against the real (canonical) root so the prefix check
+                // works on macOS where /tmp is a symlink to /private/tmp.
+                const resolved = path.resolve(resolvedRoot, normalized);
+                if (!resolved.startsWith(resolvedRoot + path.sep) && resolved !== resolvedRoot) {
+                    throw new Error(`Unpack rejected: path "${entry}" escapes project root`);
+                }
+            }
+
+            // Extract from the verified local tarball.
+            const extractProc = Bun.spawn(["tar", "-xf", tarPath, "-C", projectRoot], {
+                stdout: "pipe",
+                stderr: "pipe",
+            });
+            const extractErr = await new Response(extractProc.stderr).text();
+            const extractCode = await extractProc.exited;
+
+            if (extractCode !== 0) {
+                throw new Error(`Unpack failed: tar exited ${extractCode} (${extractErr.trim()})`);
+            }
+        } finally {
+            try {
+                fs.rmSync(tarPath, { force: true });
+            } catch {
+                // Best-effort cleanup; a leftover scratch tarball is harmless.
+            }
         }
     }
 }
