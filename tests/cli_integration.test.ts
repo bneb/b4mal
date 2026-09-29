@@ -156,6 +156,46 @@ describe("CLI — init", () => {
         expect(result.exitCode).toBe(0);
         await fs.rm(emptyDir, { recursive: true, force: true });
     }, 10000);
+
+    test("does not tell the user to edit command arrays that do not exist", async () => {
+        // Regression: an empty project produced a lock containing literally
+        // `[]`, followed by "Edit the cmd arrays in b4mal.lock" — advice the
+        // user could not act on, because there were no tasks to edit.
+        const emptyDir = join(os.tmpdir(), "b4mal-empty-msg-" + Date.now());
+        await fs.mkdir(emptyDir, { recursive: true });
+
+        const result = await runCLI(["init"], emptyDir);
+        const output = result.stdout + result.stderr;
+
+        const lockContent = await fs.readFile(join(emptyDir, "b4mal.lock"), "utf-8");
+        expect(JSON.parse(lockContent)).toEqual([]);
+
+        expect(output).not.toMatch(/Edit the cmd arrays/);
+        expect(output).toMatch(/no tasks|empty/i);
+        expect(output).toMatch(/b4mal\.config\.json/);
+
+        await fs.rm(emptyDir, { recursive: true, force: true });
+    }, 15000);
+
+    test("points at the config file when the lock is generated from it", async () => {
+        // When b4mal.config.json exists the lock is a build product, so hand
+        // edits to it are overwritten on the next build. The message must not
+        // recommend editing the lock.
+        const cfgDir = join(os.tmpdir(), "b4mal-cfg-msg-" + Date.now());
+        await fs.mkdir(cfgDir, { recursive: true });
+        await fs.writeFile(join(cfgDir, "b4mal.config.json"), JSON.stringify({
+            tasks: { greet: { cmd: ["sh", "-c", "echo hi"] } },
+        }));
+
+        const result = await runCLI(["init"], cfgDir);
+        const output = result.stdout + result.stderr;
+
+        expect(result.exitCode).toBe(0);
+        expect(output).not.toMatch(/Edit the cmd arrays/);
+        expect(output).toMatch(/b4mal\.config\.json/);
+
+        await fs.rm(cfgDir, { recursive: true, force: true });
+    }, 15000);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

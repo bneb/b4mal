@@ -21,6 +21,7 @@ import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import { B4malEngine } from "../core/engine";
 import { runDemo } from "./demo";
+import { getVersion } from "./version";
 
 // ─── ANSI colour helpers ──────────────────────────────────────────────────────
 
@@ -89,8 +90,9 @@ async function main() {
     const command = positionals[2];
 
     if (values.version) {
-        const pkg = JSON.parse(readFileSync(join(import.meta.dir, "../../package.json"), "utf-8"));
-        process.stdout.write(`${pkg.version}\n`);
+        // Never throws: falls back to a compiled-in version if package.json
+        // cannot be located (see src/cli/version.ts).
+        process.stdout.write(`${getVersion()}\n`);
         process.exit(0);
     }
 
@@ -128,8 +130,34 @@ async function main() {
                 const { MigrationWizard } = await import("./wizard");
                 const migratedTasks = await MigrationWizard.prompt(engine.projectRoot);
                 await engine.init(migratedTasks || undefined);
-                ok("b4mal.lock generated.");
-                info("Edit the cmd arrays in b4mal.lock, then run: b4mal build");
+
+                // Report what was actually written rather than assuming. init can
+                // legitimately discover nothing (empty project, unrecognised
+                // layout), and telling the user to "edit the cmd arrays" when the
+                // lock contains no tasks is worse than saying so.
+                const lockPath = join(engine.projectRoot, "b4mal.lock");
+                const hasConfig = existsSync(join(engine.projectRoot, "b4mal.config.json"));
+
+                let discovered = 0;
+                try {
+                    const raw = JSON.parse(readFileSync(lockPath, "utf-8"));
+                    discovered = (Array.isArray(raw) ? raw : raw.tasks ?? []).length;
+                } catch {
+                    // Unreadable lock is reported by `b4mal build`; nothing to add here.
+                }
+
+                if (discovered === 0) {
+                    warn("Discovery found no tasks — b4mal.lock is empty.");
+                    info("Define your tasks in b4mal.config.json, then run: b4mal build");
+                } else if (hasConfig) {
+                    ok(`b4mal.lock generated — ${discovered} task(s).`);
+                    info("b4mal.lock is generated from b4mal.config.json, so edit the config, not the lock.");
+                    info("Then run: b4mal build");
+                } else {
+                    ok(`b4mal.lock generated — ${discovered} task(s).`);
+                    warn("The discovered tasks have placeholder commands and will not build anything.");
+                    info("Declare real commands in b4mal.config.json, then run: b4mal build");
+                }
                 break;
             }
 
@@ -211,6 +239,8 @@ async function main() {
                 for (const r of result.results) {
                     if (r.cached) {
                         process.stdout.write(`${c.cyan}${c.dim}   ↩ ${r.taskId} (cached)${c.reset}\n`);
+                    } else if (r.skipped) {
+                        process.stdout.write(`${c.yellow}   ⊘ ${r.taskId} (skipped — dependency failed)${c.reset}\n`);
                     } else if (r.exitCode !== 0) {
                         process.stderr.write(`${c.red}   ✗ ${r.taskId}  [exit ${r.exitCode}]${c.reset}\n`);
                         if (r.stderr) process.stderr.write(`${c.dim}${r.stderr}${c.reset}\n`);
@@ -223,8 +253,11 @@ async function main() {
                 if (hits > 0) info(`${hits} task(s) restored from cache — ${misses} executed.`);
 
                 if (!result.success) {
-                    fail("One or more tasks exited non-zero.");
-                    
+                    const skippedCount = result.results.filter(r => r.skipped).length;
+                    fail(skippedCount > 0
+                        ? `One or more tasks failed — ${skippedCount} downstream task(s) skipped.`
+                        : "One or more tasks exited non-zero.");
+
                     process.exit(1);
                 }
 
@@ -284,13 +317,15 @@ async function main() {
                 const shadows = await engine.shadow();
                 issues += shadows.length;
                 for (const s of shadows) {
+                    const isImplicitDep = s.kind === "implicit-dependency";
                     findings.push({
-                        type: "shadow",
+                        type: isImplicitDep ? "implicit-dependency" : "shadow",
                         severity: "warning",
                         upstream: s.taskA,
                         downstream: s.taskB,
-                        resource: s.counterexample,
-                        message: `Shadow: ${s.taskB} masks ${s.taskA} on ${s.counterexample}`,
+                        resource: s.resources?.[0] ?? s.counterexample,
+                        ordering: s.ordering,
+                        message: s.counterexample ?? `Shadow: ${s.taskB} masks ${s.taskA}`,
                         help: "https://b4mal.dev/concepts/resource-isolation#shadowing-detection",
                     });
                 }
@@ -317,9 +352,16 @@ async function main() {
                             process.stdout.write(
                                 `   ${c.red}Collision${c.reset}: ${c.bold}${f.taskA}${c.reset} ↔ ${c.bold}${f.taskB}${c.reset} on ${c.dim}${f.resource}${c.reset}\n`
                             );
-                        } else {
+                        } else if (f.type === "implicit-dependency") {
                             process.stdout.write(
-                                `   ${c.yellow}Shadow${c.reset}: ${c.bold}${f.downstream}${c.reset} masks ${c.bold}${f.upstream}${c.reset} on ${c.dim}${f.resource}${c.reset}\n`
+                                `   ${c.yellow}Implicit dependency${c.reset}: ${c.bold}${f.downstream}${c.reset} reads ${c.dim}${f.resource}${c.reset} produced by ${c.bold}${f.upstream}${c.reset} with no declared edge\n`
+                            );
+                        } else {
+                            const note = f.ordering === "implicit"
+                                ? `${c.dim} (no declared dependency — ordering synthesized by the planner)${c.reset}`
+                                : "";
+                            process.stdout.write(
+                                `   ${c.yellow}Shadow${c.reset}: ${c.bold}${f.downstream}${c.reset} masks ${c.bold}${f.upstream}${c.reset} on ${c.dim}${f.resource}${c.reset}${note}\n`
                             );
                         }
                     }
@@ -347,8 +389,15 @@ async function main() {
                 } else {
                     warn(`${shadows.length} shadowing event(s) detected.`);
                     for (const s of shadows) {
+                        if (s.kind === "implicit-dependency") {
+                            process.stdout.write(
+                                `   ${c.yellow} (Implicit) ${s.taskB}${c.reset} reads output of ${c.bold}${s.taskA}${c.reset} on: ${c.dim}${s.resources?.[0] ?? s.counterexample}${c.reset}\n`
+                            );
+                            continue;
+                        }
+                        const note = s.ordering === "implicit" ? `${c.dim} [no declared dependency]${c.reset}` : "";
                         process.stdout.write(
-                            `   ${c.yellow} (Content) ${s.taskB}${c.reset} masks ${c.bold}${s.taskA}${c.reset} on: ${c.dim}${s.counterexample}${c.reset}\n`
+                            `   ${c.yellow} (Content) ${s.taskB}${c.reset} masks ${c.bold}${s.taskA}${c.reset} on: ${c.dim}${s.resources?.[0] ?? s.counterexample}${c.reset}${note}\n`
                         );
                     }
                     process.stdout.write(`\n   ${c.dim}Shadowing is deterministic in a standard DAG, but it may indicate\n`);
@@ -443,9 +492,8 @@ async function main() {
 // ─── Usage ───────────────────────────────────────────────────────────────────
 
 function printUsage(): void {
-    const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf-8"));
     process.stdout.write(`
-  ${c.bold}b4mal${c.reset} — Core Build Engine v${pkg.version}
+  ${c.bold}b4mal${c.reset} — Core Build Engine v${getVersion()}
 
   ${c.bold}Usage:${c.reset}
     b4mal demo           🛑 See the engine intercept a race condition live (start here)
