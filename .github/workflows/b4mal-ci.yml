@@ -68,3 +68,21 @@ jobs:
       # nothing would have noticed if it stopped: no CI job, no test, no import
       # from the TypeScript side.
       - run: cargo test --manifest-path crates/b4mal/Cargo.toml
+
+  windows-smoke:
+    name: Windows smoke
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      - run: bun install
+      - run: bunx tsc --noEmit
+      # Not `bun test`: the suite uses `sh -c` throughout, so on Windows it would
+      # report the harness rather than the product. This runs the CLI on a
+      # platform with no POSIX shell and checks the outputs. The installation docs
+      # describe Windows as untested; this is what makes that checkable.
+      - name: Smoke check
+        run: bun run scripts/smoke-windows.ts

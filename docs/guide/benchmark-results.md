@@ -18,6 +18,11 @@ These are measured values rather than a headline: run the command below and comp
 The script exits non-zero whenever any repository is not GREEN, so it doubles as a
 check.
 
+`.github/workflows/benchmark.yml` runs it daily and on demand. That was added because
+this page recorded 35/35 GREEN on 2026-06-20 and was measuring 34/35 by 2026-09-29
+without anyone noticing — a benchmark that only runs when someone remembers is a
+snapshot, not a result.
+
 ## All 35 repos
 
 | Repo | Tasks | Status |

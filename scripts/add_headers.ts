@@ -37,9 +37,18 @@ const descriptions: Record<string, string> = {
     "src/telemetry/otlp_exporter.ts": "Exports standardized trace and metric data to OpenTelemetry collectors."
 };
 
+// Entries whose file no longer exists are collected rather than silently skipped.
+// Ten of the original 33 pointed at files that were removed with the v0.5.0
+// lineage, and the `continue` below hid that: the script reported success while
+// most of its table referred to nothing.
+const missing: string[] = [];
+
 for (const [relPath, desc] of Object.entries(descriptions)) {
     const fullPath = path.join(process.cwd(), relPath);
-    if (!fs.existsSync(fullPath)) continue;
+    if (!fs.existsSync(fullPath)) {
+        missing.push(relPath);
+        continue;
+    }
     
     let content = fs.readFileSync(fullPath, "utf-8");
     
@@ -57,4 +66,14 @@ for (const [relPath, desc] of Object.entries(descriptions)) {
     
     fs.writeFileSync(fullPath, header + content);
     console.log(`Updated ${relPath}`);
+}
+
+if (missing.length > 0) {
+    console.error(
+        `\n${missing.length} of ${Object.keys(descriptions).length} entries in this table ` +
+        `point at files that do not exist:`
+    );
+    for (const relPath of missing) console.error(`  ${relPath}`);
+    console.error(`\nPrune them, or restore the files. The table is stale.`);
+    process.exitCode = 1;
 }

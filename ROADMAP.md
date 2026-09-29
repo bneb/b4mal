@@ -77,8 +77,9 @@ correct but nobody has checked, and the docs assert a result anyway.
 ## D. Hygiene
 
 15. **`scripts/add_headers.ts`** is run by nothing — it is not in `package.json` — and
-    its table lists at least two files that do not exist (`src/core/appendix_gen.ts`,
-    `src/core/audit.ts`).
+    **10 of its 33 entries point at files that do not exist** (removed with the v0.5.0
+    lineage). It now reports those and exits non-zero instead of skipping them
+    silently; the table itself still needs pruning or the files restoring.
 16. **`docs/case-studies/turborepo-migration.md`** was the acceptance criterion of a
     sprint item that was marked complete. It does not exist.
 
