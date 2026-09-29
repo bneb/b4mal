@@ -7,6 +7,7 @@ crucible_workspace/
 *.db-wal
 *.db-shm
 scratch_check_domains.py
+target/
 
 # Local tool state, not part of this project. A 16-hex-character value plus a
 # newline, rewritten occasionally; no source file, dependency, or build step
