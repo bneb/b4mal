@@ -233,6 +233,15 @@ export class DynamicExecutor {
           try {
             const l2Result = await config.remoteVault.checkAndPull(logicHash, projectRoot);
             if (l2Result) {
+              // checkAndPull downloads the archive and promotes it into the L1
+              // vault, but promoting only writes the archive — it does not put
+              // the task's files back. Without this unpack an L2 hit reported
+              // success and a cache hit while the declared outputs were absent
+              // from the workspace, which is exactly the fresh-CI-runner case
+              // the remote cache exists for.
+              if (producesArtifact) {
+                await ArtifactVault.unpack(logicHash, projectRoot);
+              }
               return {
                 taskId: task.id,
                 exitCode: l2Result.exitCode ?? 0,
@@ -243,6 +252,8 @@ export class DynamicExecutor {
               };
             }
           } catch (err: any) {
+            // Includes a failed unpack: fall through to L1 and, if that misses,
+            // to execution, rather than reporting a hit we could not restore.
             process.stderr.write(`\x1b[2m[L2] pull failed: ${err?.message || err}\x1b[0m\n`);
           }
         }
