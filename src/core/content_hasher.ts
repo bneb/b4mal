@@ -51,11 +51,62 @@ export interface HashOptions {
     projectRoot?: string;
 }
 
+/** A cached content hash plus the identity signals used to validate it. */
+interface FileCacheEntry {
+    hash: string;
+    mtime: number;
+    ctime: number;
+    size: number;
+    ino: number;
+}
+
 // ─── Hasher ──────────────────────────────────────────────────────────────────
 
 export class ContentHasher {
     private static inflight = new Map<string, Promise<string>>();
-    private static fileCache = new Map<string, { hash: string; mtime: number; size: number }>();
+
+    /**
+     * Content hashes of files already read during this process.
+     *
+     * Keyed by the CANONICAL (realpath) form of the path — the same key used for
+     * lookups. These used to differ (lookup by the caller's path, store by the
+     * resolved one), so any path containing a symlink never hit the cache at all.
+     */
+    private static fileCache = new Map<string, FileCacheEntry>();
+
+    private static cacheHits = 0;
+    private static cacheMisses = 0;
+
+    /**
+     * A cached hash is reusable only when every cheap identity signal still
+     * matches.
+     *
+     * `mtime` + `size` alone are not sufficient: a write of the same length that
+     * lands within one mtime tick (coarse filesystem timestamps, or an explicit
+     * restore of mtime) leaves both unchanged while the content differs, and the
+     * stale hash is then served for changed content. `ctime` advances on any
+     * write regardless of mtime, and `ino` catches a replaced file, so both are
+     * required before a cached hash is trusted.
+     */
+    private static isFresh(entry: FileCacheEntry, stats: { ino: number; size: number; mtimeMs: number; ctimeMs: number }): boolean {
+        return entry.ino === stats.ino
+            && entry.size === stats.size
+            && entry.mtime === stats.mtimeMs
+            && entry.ctime === stats.ctimeMs;
+    }
+
+    /** Diagnostics for tests and callers that want to observe cache efficacy. */
+    static get cacheStats(): { hits: number; misses: number; size: number } {
+        return { hits: this.cacheHits, misses: this.cacheMisses, size: this.fileCache.size };
+    }
+
+    /** Drop all cached hashes. Required whenever files may have changed underneath us. */
+    static clearCache(): void {
+        this.fileCache.clear();
+        this.inflight.clear();
+        this.cacheHits = 0;
+        this.cacheMisses = 0;
+    }
 
     /**
      * Recursively compute a deterministic SHA-256 hash of a file or directory.
@@ -100,20 +151,30 @@ export class ContentHasher {
         try {
             const stats = await stat(resolvedPath);
             if (stats.isFile()) {
-                // Check persistent file cache
-                const cached = this.fileCache.get(targetPath);
-                if (cached && cached.mtime === stats.mtimeMs && cached.size === stats.size && !options.useLogicHash) {
+                // Look up and store under the same canonical key. These differed
+                // before, which meant the cache never hit for any path whose
+                // realpath is not the path as given (anything containing a
+                // symlink — including os.tmpdir() on macOS, where /var is a
+                // symlink to /private/var).
+                const fileKey = resolvedPath;
+
+                const cached = this.fileCache.get(fileKey);
+                if (cached && !options.useLogicHash && this.isFresh(cached, stats)) {
+                    this.cacheHits++;
                     return cached.hash;
                 }
 
                 const hash = await this.hashFile(resolvedPath, options, stats.size);
-                
+                this.cacheMisses++;
+
                 // Only cache raw content hashes, not logic hashes (logic hashes are more complex to cache safely)
                 if (!options.useLogicHash) {
-                    this.fileCache.set(resolvedPath, {
+                    this.fileCache.set(fileKey, {
                         hash,
                         mtime: stats.mtimeMs,
+                        ctime: stats.ctimeMs,
                         size: stats.size,
+                        ino: stats.ino,
                     });
                 }
                 return hash;
