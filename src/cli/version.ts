@@ -25,7 +25,7 @@ const MAX_ASCENT = 5;
  * Compiled-in fallback, kept in sync with package.json by
  * tests/cli_version.test.ts.
  */
-export const FALLBACK_VERSION = "0.1.0";
+export const FALLBACK_VERSION = "0.1.1";
 
 const PKG_NAME = "b4mal";
 

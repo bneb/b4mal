@@ -1,8 +1,31 @@
 {
   "name": "b4mal",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Verified monorepo build orchestrator — formal resource-conflict detection, deterministic caching, and DAG execution",
   "type": "module",
+  "license": "MIT",
+  "author": "Kevin <oconn.kv@gmail.com>",
+  "homepage": "https://github.com/bneb/b4mal#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bneb/b4mal.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bneb/b4mal/issues"
+  },
+  "keywords": [
+    "build",
+    "monorepo",
+    "orchestrator",
+    "dag",
+    "cache",
+    "deterministic",
+    "task-runner",
+    "bun"
+  ],
+  "engines": {
+    "bun": ">=1.1.0"
+  },
   "bin": {
     "b4mal": "./dist/index.js"
   },
