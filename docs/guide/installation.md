@@ -32,8 +32,12 @@ Windows.
 What that does not cover: the test suite itself (it uses `sh -c` throughout, so it
 cannot run there), and L1 caching. The artifact vault shells out to `tar` and `zstd`;
 Windows ships the former but not the latter, so packing fails and each run re-executes
-rather than restoring from cache. No prebuilt Windows binary is published either — the
-release matrix builds Linux and macOS only.
+rather than restoring from cache.
+
+A Windows binary is now in the release matrix, so "one binary, no runtime install"
+holds there too — but it arrives with the release that follows the one you are
+reading about, and `npm install -g @bneb/b4mal` still requires Bun to be present on
+Windows.
 
 ## Docker
 

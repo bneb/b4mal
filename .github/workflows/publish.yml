@@ -30,6 +30,14 @@ jobs:
           - os: macos-latest
             target: b4mal-macos-arm64
             compile-target: bun-darwin-arm64
+          # Windows was the gap that made "one binary, no runtime install" untrue
+          # on that platform: npm install needs Bun present, and there was no
+          # release artifact. Compiled from ubuntu — Bun cross-compiles the
+          # windows target, so no windows runner is needed to build it.
+          - os: ubuntu-latest
+            target: b4mal-windows-x64.exe
+            compile-target: bun-windows-x64
+            windows: "true"
 
     steps:
       - uses: actions/checkout@v4
@@ -42,6 +50,21 @@ jobs:
 
       - name: Compile binary
         run: bun build --compile --target=${{ matrix.compile-target }} src/cli/index.ts --outfile dist/${{ matrix.target }}
+
+      # Cross-compiled windows executables are easy to produce and easy to
+      # produce wrong. A PE file starts with "MZ"; checking it here means a
+      # truncated or mis-targeted upload fails the build instead of shipping.
+      - name: Verify the windows executable
+        if: matrix.windows == 'true'
+        shell: bash
+        run: |
+          file="dist/${{ matrix.target }}"
+          head -c 2 "$file" | grep -q 'MZ' || {
+            echo "::error::$file is not a PE executable"
+            exit 1
+          }
+          size=$(wc -c < "$file" | tr -d ' ')
+          echo "PE executable verified ($size bytes)"
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
