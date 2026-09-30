@@ -79,8 +79,12 @@ describe("docs claims: CLI commands", () => {
      *
      *  - lock / config / json / ts  — file names (`b4mal.lock`, `b4mal.config.json`)
      *  - login                      — named only to say the command does NOT exist
+     *  - on                         — the YAML `on:` key, and an English word
+     *                                 ("add b4mal on pull_request"). There is no
+     *                                 `b4mal on` subcommand, so it cannot mask a
+     *                                 real typo.
      */
-    const NOT_COMMANDS = new Set(["lock", "config", "json", "ts", "login"]);
+    const NOT_COMMANDS = new Set(["lock", "config", "json", "ts", "login", "on"]);
 
     /**
      * Command-position text only: inline code spans and fenced code blocks.

@@ -60,3 +60,34 @@ in place and only their dependents are skipped. See the
 
 **Trace synthesis** is Linux-only. On macOS and Windows it cannot run natively; use a
 Linux container with `--cap-add=SYS_PTRACE` if you need it.
+
+## GitHub Action
+
+Add a build-graph audit to any repository — it reads your `b4mal.config.json` (or
+`b4mal.lock`) and reports problems as inline PR annotations. It does not run a
+build, and a repository without b4mal files is a no-op, so it's safe to add
+anywhere.
+
+```yaml
+# .github/workflows/b4mal.yml
+name: b4mal
+on: [push, pull_request]
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: bneb/b4mal@v0.1.1
+        with:
+          fail-on-findings: false   # report first; gate when you are ready
+```
+
+It finds three kinds of issue, the same ones `b4mal check` reports: resource
+collisions, deterministic overwrites (a task silently clobbers another), and
+implicit dependencies (a task reads another's output with no edge declared).
+
+Inputs: `version` (pin for reproducible CI), `project-path`, and
+`fail-on-findings` (default `true`; set `false` to adopt gradually). Outputs:
+`verified`, `findings`, `collisions`, `shadows`, `implicit`.
+
+If you don't have a config yet, `b4mal init` writes one from your existing
+`turbo.json`, `nx.json`, `lerna.json`, or `package.json` scripts.

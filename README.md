@@ -53,6 +53,20 @@ b4mal analyze        # static HTML observability dashboard
 
 `b4mal.lock` is a **generated** artifact whenever `b4mal.config.json` is present — edit the config, not the lock. Running `b4mal init` auto-discovers an existing project, and the migration wizard can translate legacy Turborepo, Nx, and Lerna configurations.
 
+### Audit a build graph in CI, without switching build systems
+
+`b4mal check` reports resource collisions, deterministic overwrites, and implicit
+dependencies without running anything. As a GitHub Action it is a few lines and a
+no-op on repositories that do not use b4mal:
+
+```yaml
+- uses: bneb/b4mal@v0.1.1
+  with:
+    fail-on-findings: false   # start by reporting, not gating
+```
+
+See [Installation](/guide/installation#github-action) for inputs and outputs.
+
 ### Autonomous Trace Synthesis
 
 B4mal can automatically synthesize a mathematically sound DAG by passively tracing a legacy build script's file descriptor usage:

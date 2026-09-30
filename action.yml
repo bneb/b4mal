@@ -1,0 +1,106 @@
+name: b4mal
+description: Audit your b4mal build graph for resource collisions, deterministic overwrites, and implicit dependencies — without running a build.
+author: bneb
+
+branding:
+  icon: shield
+  color: purple
+
+inputs:
+  version:
+    description: "Version of b4mal to install, e.g. 0.1.1. Pin for reproducible CI. Empty installs the latest published version."
+    required: false
+    default: ""
+  project-path:
+    description: "Directory holding b4mal.config.json or b4mal.lock. Use '.' for the repository root."
+    required: false
+    default: "."
+  fail-on-findings:
+    description: "Fail the job when anything is found. Use 'false' to report without gating."
+    required: false
+    default: "true"
+
+outputs:
+  verified:
+    description: "'true' when the graph has no findings, 'false' otherwise."
+    value: ${{ steps.audit.outputs.verified }}
+  findings:
+    description: "Total findings (collisions + shadows + implicit dependencies)."
+    value: ${{ steps.audit.outputs.findings }}
+  collisions:
+    description: "Resource-collision findings."
+    value: ${{ steps.audit.outputs.collisions }}
+  shadows:
+    description: "Deterministic-overwrite (shadow) findings."
+    value: ${{ steps.audit.outputs.shadows }}
+  implicit:
+    description: "Implicit-dependency findings."
+    value: ${{ steps.audit.outputs.implicit }}
+
+runs:
+  using: composite
+  steps:
+    - uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+
+    - name: Install b4mal
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.version }}" ]; then
+          spec="@bneb/b4mal@${{ inputs.version }}"
+        else
+          spec="@bneb/b4mal"
+        fi
+        echo "Installing $spec" >> "$GITHUB_STEP_SUMMARY"
+        bun add -g "$spec"
+
+    # An action that red-lines every repository it is added to will be removed
+    # from them, so a repository that does not use b4mal is a no-op.
+    - name: Look for a b4mal project
+      id: probe
+      shell: bash
+      run: |
+        if [ -f "${{ inputs.project-path }}/b4mal.config.json" ] || [ -f "${{ inputs.project-path }}/b4mal.lock" ]; then
+          echo "found=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "found=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Audit the build graph
+      id: audit
+      if: steps.probe.outputs.found == 'true'
+      shell: bash
+      run: |
+        report="$RUNNER_TEMP/b4mal-check.json"
+        # Exit 1 means findings, not a crash, so it is captured rather than
+        # aborting the step before the report is read.
+        set +e
+        bun x b4mal check --json > "$report"
+        echo "b4mal check exited $? (1 means findings were reported)"
+        set -e
+        node "$GITHUB_ACTION_PATH/scripts/b4mal-report.mjs" "$report" \
+          --file "$(basename "$(ls "${{ inputs.project-path }}/b4mal.config.json" 2>/dev/null || ls "${{ inputs.project-path }}/b4mal.lock")")"
+      working-directory: ${{ inputs.project-path }}
+
+    - name: Summarise
+      if: always()
+      shell: bash
+      run: |
+        {
+          echo "### b4mal check"
+          if [ "${{ steps.probe.outputs.found }}" != "true" ]; then
+            echo "No b4mal.config.json or b4mal.lock under \`${{ inputs.project-path }}\` — nothing to audit."
+          else
+            echo "findings: ${{ steps.audit.outputs.findings }} (collisions ${{ steps.audit.outputs.collisions }}, shadows ${{ steps.audit.outputs.shadows }}, implicit ${{ steps.audit.outputs.implicit }})"
+            echo ""
+            echo "Audit a build graph without running it: \`b4mal check\`. Migrate an existing monorepo: \`b4mal init\`."
+          fi
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Gate on findings
+      if: steps.probe.outputs.found == 'true' && inputs.fail-on-findings == 'true' && steps.audit.outputs.verified != 'true'
+      shell: bash
+      run: |
+        echo "::error::b4mal check found ${{ steps.audit.outputs.findings }} issue(s) in ${{ inputs.project-path }}"
+        exit 1
