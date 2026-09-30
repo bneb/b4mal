@@ -4,6 +4,7 @@
  */
 
 import { VolatilityForecaster } from "../core/volatility_forecaster";
+import { ResourcePrefixTree } from "../formal/prefix_tree";
 import path from "path";
 import os from "os";
 
@@ -132,7 +133,37 @@ export class WavePlanner {
         }
 
         const waves: Wave[] = [];
-        const lastAccessors: { id: string, reads: string[], writes: string[] }[] = [];
+
+        // Overlap index over every accessor accepted so far, in the plan order.
+        //
+        // This used to be a linear scan of `lastAccessors` for each task, which is
+        // O(n^2): every task compared itself against every previously-accepted
+        // task. At 2,000 tasks that already cost 6s and doubled the input
+        // multiplied the time by ~5; 100,000 tasks — a plausible monorepo — would
+        // have taken hours.
+        //
+        // ResourcePrefixTree answers "which accepted tasks conflict with these
+        // claims?" in one lookup, giving the same edges in O(log n)-ish time.
+        //
+        // Semantics match claimsOverlap exactly, because accessMap has already
+        // normalised every filesystem claim to a bare path (stripping `fs:`) while
+        // leaving opaque protocol claims (`env:PORT`, `db:primary`) intact. The
+        // tree applies directory-boundary matching to the former and exact-segment
+        // matching to the latter — which is what claimsOverlap does for each class.
+        const overlapIndex = new ResourcePrefixTree();
+        /** Tasks conflicting with `id`, as computed by the shared tree semantics. */
+        const conflictsFor = (id: string, access: { reads: string[]; writes: string[] }): Set<string> => {
+            const found = new Set<string>();
+            // A read conflicts with a prior write; a write conflicts with a prior
+            // read or a prior write. Mirror the two loops of the original scan.
+            for (const claim of access.reads) {
+                for (const other of overlapIndex.findConflicts(claim, id, "read")) found.add(other);
+            }
+            for (const claim of access.writes) {
+                for (const other of overlapIndex.findConflicts(claim, id, "write")) found.add(other);
+            }
+            return found;
+        };
 
         for (const group of depthGroups) {
             if (forecaster) {
@@ -148,46 +179,17 @@ export class WavePlanner {
 
                 for (const curr of sw) {
                     const access = accessMap.get(curr)!;
-                    const taskReads = access.reads;
-                    const taskWrites = access.writes;
-                    
-                    // Inject synthetic dependencies to serialize across ALL overlapping tasks
-                    for (let j = lastAccessors.length - 1; j >= 0; j--) {
-                        const prev = lastAccessors[j];
-                        let overlaps = false;
-                        
-                        // curr Read overlaps with prev Write
-                        for (const claimA of taskReads) {
-                            for (const claimB of prev.writes) {
-                                if (this.claimsOverlap(claimA, claimB)) { overlaps = true; break; }
-                            }
-                            if (overlaps) break;
-                        }
-                        // curr Write overlaps with prev Read OR prev Write
-                        if (!overlaps) {
-                            for (const claimA of taskWrites) {
-                                for (const claimB of prev.reads) {
-                                    if (this.claimsOverlap(claimA, claimB)) { overlaps = true; break; }
-                                }
-                                if (overlaps) break;
-                                for (const claimB of prev.writes) {
-                                    if (this.claimsOverlap(claimA, claimB)) { overlaps = true; break; }
-                                }
-                                if (overlaps) break;
-                            }
-                        }
-                        
-                        if (overlaps) {
-                            // Inject dependency
-                            inDegree.set(curr, (inDegree.get(curr) ?? 0) + 1);
-                            const deps = dependents.get(prev.id) ?? [];
-                            deps.push(curr);
-                            dependents.set(prev.id, deps);
-                            // We don't break early because a task might overlap multiple concurrent previous tasks
-                        }
+                    for (const prevId of conflictsFor(curr, access)) {
+                        // Inject dependency: the overlapping task must finish first.
+                        inDegree.set(curr, (inDegree.get(curr) ?? 0) + 1);
+                        const deps = dependents.get(prevId) ?? [];
+                        deps.push(curr);
+                        dependents.set(prevId, deps);
                     }
-                    
-                    lastAccessors.push({ id: curr, reads: taskReads, writes: taskWrites });
+
+                    // Accept this task for later comparisons by indexing its claims.
+                    for (const claim of access.reads) overlapIndex.insert(claim, curr, "read");
+                    for (const claim of access.writes) overlapIndex.insert(claim, curr, "write");
                 }
             }
         }
