@@ -46,9 +46,12 @@ printf '{"name":"b4mal-bench","private":true,"workspaces":["pkg*"],"packageManag
 bun -e '
 const T = process.argv[1], N = +process.argv[2], B = process.argv[3], S = process.argv[4];
 for (let i=1;i<=N;i++){
-  const p = await Bun.file(`pkg${i}/package.json`).json();
-  p.name = `pkg${i}`; p.version="1.0.0"; p.private=true;
-  p.scripts = { build: `bun ${T} dist/out.js ${B} pkg${i}`, test: `bun ${T} dist/test.txt ${S} pkg${i}` };
+  // Build each package.json from scratch. Reading a file that does not exist yet
+  // throws and left the fixture half-built, so every run reported INVALID.
+  const p = {
+    name: `pkg${i}`, version: "1.0.0", private: true,
+    scripts: { build: `bun ${T} dist/out.js ${B} pkg${i}`, test: `bun ${T} dist/test.txt ${S} pkg${i}` },
+  };
   await Bun.write(`pkg${i}/package.json`, JSON.stringify(p,null,2));
 }
 const tasks = {};
@@ -110,29 +113,38 @@ echo "=== B. correctness: two tasks writing the SAME file ==="
 # Each writer truncates the file, pauses, then finishes. Run concurrently the
 # file tears (one writer's head, the other's tail); serialised it stays whole.
 mkdir -p "$WORK/race" && cd "$WORK/race"
-printf '{"name":"race","private":true,"workspaces":["pkgA","pkgB"],"packageManager":"bun@1.3.14"}\n' > package.json
 OUT="$WORK/race/out.txt"
-for t in A B; do
-  mkdir -p "pkg$t"; echo "export const x=1;" > "pkg$t/i.js"
-  printf '{"name":"pkg%s","version":"1.0.0","scripts":{"writer-%s":"bun -e %s"}}' "$t" "$t" \
-    "\"import fs from 'fs'; fs.writeFileSync('$OUT','$t-HEAD\\\\n'); await new Promise(r=>setTimeout(r,400)); fs.appendFileSync('$OUT','$t-TAIL\\\\n');\"" \
-    > "pkg$t/package.json"
-done
+# The workspace root. Without it turbo has no packages to discover and silently
+# runs nothing, which reads as "0 torn" rather than as the broken fixture it is.
 printf '{"name":"race","private":true,"workspaces":["pkgA","pkgB"],"packageManager":"bun@1.3.14"}\n' > package.json
+for t in A B; do mkdir -p "pkg$t"; echo "export const x=1;" > "pkg$t/i.js"; done
+# Build each writer package.json in JS. The shell printf that used to do this
+# emitted nested double quotes and produced invalid JSON, so turbo and nx found
+# no scripts and reported "no output" — which read as "0 torn" rather than as the
+# broken fixture it was.
+bun -e '
+const out = process.argv[1];
+const w = (tag) => `bun -e ${JSON.stringify(
+  `import fs from "fs"; fs.writeFileSync(${JSON.stringify(out)},"${tag}-HEAD\\n"); await new Promise(r=>setTimeout(r,400)); fs.appendFileSync(${JSON.stringify(out)},"${tag}-TAIL\\n");`
+)}`;
+for (const tag of ["A","B"]) {
+  await Bun.write(`pkg${tag}/package.json`, JSON.stringify({
+    name: `pkg${tag}`, version: "1.0.0", private: true,
+    scripts: { [`writer-${tag.toLowerCase()}`]: w(tag) },
+  }, null, 2));
+}
+await Bun.write("b4mal.config.json", JSON.stringify({tasks:{
+  "writer-a":{cmd:["bun","-e",`import fs from "fs"; fs.writeFileSync(${JSON.stringify(out)},"A-HEAD\\n"); await new Promise(r=>setTimeout(r,400)); fs.appendFileSync(${JSON.stringify(out)},"A-TAIL\\n");`], outputs:["out.txt"]},
+  "writer-b":{cmd:["bun","-e",`import fs from "fs"; fs.writeFileSync(${JSON.stringify(out)},"B-HEAD\\n"); await new Promise(r=>setTimeout(r,400)); fs.appendFileSync(${JSON.stringify(out)},"B-TAIL\\n");`], outputs:["out.txt"]}}},null,2));
+' "$OUT"
+for t in A B; do mkdir -p "pkg$t"; echo "export const x=1;" > "pkg$t/i.js"; done
 cp -r "$WORK/monorepo/node_modules" . 2>/dev/null
 printf '{ "$schema":"https://turbo.build/schema.json","tasks":{ "writer-a":{}, "writer-b":{} } }\n' > turbo.json
 printf '{ "targetDefaults":{ "writer-a":{}, "writer-b":{} } }\n' > nx.json
-bun -e '
-const out = process.argv[1];
-const w = (tag) => ["bun","-e",`import fs from "fs"; fs.writeFileSync("${out}","${tag}-HEAD\\n"); await new Promise(r=>setTimeout(r,400)); fs.appendFileSync("${out}","${tag}-TAIL\\n");`];
-await Bun.write("b4mal.config.json", JSON.stringify({tasks:{
-  "writer-a":{cmd:w("A"), outputs:["out.txt"]},
-  "writer-b":{cmd:w("B"), outputs:["out.txt"]}}},null,2));
-' "$OUT"
 ROUNDS=5
 echo "5 rounds. CONSISTENT = both halves from one writer (2 lines). TORN = interleaved."
 for tool in b4mal turbo nx; do
-  c=0; tr=0
+  c=0; tr=0; ran=0
   for r in $(seq 1 $ROUNDS); do
     rm -f out.txt; rm -rf .b4mal "$HOME"/.b4mal/artifacts node_modules/.cache/turbo node_modules/.nx .turbo 2>/dev/null
     case "$tool" in
@@ -140,12 +152,20 @@ for tool in b4mal turbo nx; do
       turbo) ./node_modules/.bin/turbo run writer-a writer-b >/dev/null 2>&1 ;;
       nx)    ./node_modules/.bin/nx run-many -t writer-a -t writer-b --all --skip-nx-cache >/dev/null 2>&1 ;;
     esac
+    # A round where the tool never wrote the file did not "pass" or "tear" — it
+    # produced nothing. Counting those as zero made a broken fixture read as a
+    # clean 0-torn result, which is the opposite of what it means.
     if [ ! -f out.txt ]; then continue; fi
+    ran=$((ran+1))
     # A whole file has exactly 2 lines whose head and tail share one writer.
     n=$(wc -l < out.txt | tr -d ' ')
     h=$(head -1 out.txt); t=$(tail -1 out.txt)
     if [ "$n" = "2" ] && { [ "$h" = "A-HEAD" ] && [ "$t" = "A-TAIL" ]; } || { [ "$h" = "B-HEAD" ] && [ "$t" = "B-TAIL" ]; }; then
       c=$((c+1)); else tr=$((tr+1)); fi
   done
-  printf '  %-6s %d consistent / %d torn of %d\n' "$tool" "$c" "$tr" "$ROUNDS"
+  if [ "$ran" -eq 0 ]; then
+    printf '  %-6s not measured — the tasks produced no output in any round\n' "$tool"
+  else
+    printf '  %-6s %d consistent / %d torn of %d run\n' "$tool" "$c" "$tr" "$ran"
+  fi
 done

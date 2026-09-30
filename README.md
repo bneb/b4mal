@@ -98,48 +98,59 @@ package. Reproduce with `scripts/bench-compare.sh`.
 Two tasks declaring the **same output file**, each truncating it, pausing, then
 finishing. Run concurrently, the file tears; serialised, it stays whole.
 
-| Tool | Consistent | Torn |
-|---|---|---|
-| **b4mal** | **5 / 5** | **0** |
-| Turborepo | 0 / 5 | **5** |
+| Tool | Result |
+|---|---|
+| **b4mal** | **5 / 5 consistent** |
+| Turborepo | 2 consistent / **3 torn** of 5 |
+| Nx | not measured — the harness could not drive its writers |
 
-Turborepo tore the file on every run — e.g. `B-HEAD│A-TAIL│B-TAIL`, one task's tail
-landing inside another's write. b4mal never did: declared outputs feed a prefix
-tree, which injects a dependency so the tasks never overlap.
+Turborepo's race is real but *nondeterministic*: it tore the file in 3 of 5 runs and
+happened to get lucky in the other 2. That is the point — a race is a heisenbug, not
+a reliable failure. b4mal never tore, because declared outputs feed a prefix tree
+that injects a dependency so the tasks never overlap. This does not depend on task
+duration or graph size: it is the difference between a DAG that happened to be
+correct and a scheduler that guarantees it.
 
-This does not depend on task duration or graph size. It is the difference between
-"the DAG happened to be correct" and "the scheduler guarantees it."
+(Nx is listed as not measured because the harness's Nx wiring does not currently
+execute its writer tasks; we would rather say so than publish a zero.)
 
-### Performance — comparable, and behind on warm cache
+### Performance — at parity, and ahead on warm cache
 
-Median of 3 runs, local cache only, no remote cache on any side:
+Median of 3 runs, local cache only, no remote cache on any side. Three independent
+harness runs; the warm-cache column is the stable signal.
 
 | Tool | Cold | Warm |
 |---|---|---|
-| b4mal | 1.88s | 0.39s |
-| Turborepo | 1.73s | **0.17s** |
-| Nx | ~5–6s first run, 0.75s after | 0.67s |
+| **b4mal** | 1.7 – 2.1s | **0.14 – 0.16s** |
+| Turborepo | 1.5 – 4.1s | 0.16 – 0.18s |
+| Nx | 0.9 – 1.6s | 0.65 – 0.81s |
 
-**b4mal does not win on wall-clock.** Cold is a tie; on a warm cache Turborepo is
-roughly 2× faster. Reporting otherwise would not survive anyone running this.
+**b4mal is competitive on cold and now marginally ahead of Turborepo on a warm
+cache.** An earlier revision of this table reported b4mal at 0.39s warm and
+Turborepo ~2× faster; removing the last `tar` process spawns closed that gap.
 
 Three caveats that materially affect these numbers:
 
+- **Cold figures are noisy on this machine** (Turbo ranged 1.5–4.1s across runs,
+  largely daemon start-up). Treat cold as a tie within noise; warm is the number
+  that reproduces.
 - **Turbo and Nx keep daemons warm between runs.** Their second and third "cold"
   runs are daemon-warm; b4mal has no daemon, so every cold run is honestly cold.
-  Nx's first run genuinely costs ~5–6s, which a median of three hides.
-- **Warm restore was 4.4× slower until recently** — process spawn dominated, not
-  architecture. Restoring an artifact spawned `zstd` plus `tar` twice at ~40ms each.
-  Decompression is now native; 1.72s → 0.39s for 16 artifacts. Closing the rest of
-  the gap means eliminating `tar` from the restore path.
+  Nx's true first run can exceed 20s.
 - **This is a small fixture on one machine** (Apple M4, 10 cores). It measures
   orchestrator overhead against real task durations, not a real monorepo. Treat it
   as indicative, not publishable.
 
+Warm-restore performance was improved substantially in this release cycle by
+removing process spawns from the artifact path entirely (native zstd + an in-process
+tar reader), taking a 16-artifact cache restore from ~1.7s to ~0.15s.
+
 ### The honest summary
 
-On speed b4mal is a close second. On correctness it is the only one of the three
-that can promise anything, because it is the only one that checks.
+On speed, b4mal is at parity on a cold build and now marginally ahead of Turborepo
+on a warm cache. On correctness it is the only one of the three that can promise
+anything, because it is the only one that checks — and that is the difference that
+matters when a build corrupts an artifact that then poisons every future cache.
 
 ## Not Yet Implemented
 
