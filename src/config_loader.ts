@@ -40,10 +40,29 @@ function sortedRecordKeys(rec: Record<string, string> | undefined): Record<strin
  */
 function resolveConfigPath(projectRoot: string): string {
   const configPath = join(projectRoot, "b4mal.config.json");
-  if (!existsSync(configPath)) {
-    throw new Error(`Configuration file not found: b4mal.config.json (searched in ${projectRoot}). Run 'b4mal init' to create one.`);
+  if (existsSync(configPath)) return configPath;
+
+  // `b4mal init` generates b4mal.lock; it does not create a b4mal.config.json.
+  // The old message told people to run init here — but anyone reaching this error
+  // had typically just done exactly that, so it sent them in a circle: init
+  // cannot produce the file the command needs, and re-running it changes nothing.
+  //
+  // The two cases need different advice. With a lock already present the user has
+  // a buildable project and asked for a sync they cannot have, so the fix is to
+  // drop --sync. With nothing present, init is genuinely the right next step.
+  if (existsSync(join(projectRoot, "b4mal.lock"))) {
+    throw new Error(
+      `No b4mal.config.json found (searched in ${projectRoot}).\n` +
+      `  A b4mal.lock already exists — run 'b4mal build' to use it.\n` +
+      `  Rebuilding the lock from a config needs a b4mal.config.json;\n` +
+      `  'b4mal init' creates a lockfile, not a config.`
+    );
   }
-  return configPath;
+  throw new Error(
+    `No b4mal.config.json found (searched in ${projectRoot}).\n` +
+    `  Run 'b4mal init' to generate a b4mal.lock from your project, or write a\n` +
+    `  b4mal.config.json to make the config the source of truth.`
+  );
 }
 
 function verifyPathBoundary(configPath: string, projectRoot: string): void {

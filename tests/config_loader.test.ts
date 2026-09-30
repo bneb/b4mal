@@ -59,6 +59,37 @@ describe("loadConfig", () => {
     expect(() => loadConfig(testDir)).toThrow();
   });
 
+  // The message for a missing config used to say "Run 'b4mal init' to create
+  // one". That is wrong: init generates b4mal.lock, not a config. Anyone who ran
+  // init and then hit this error had done the recommended thing and been sent
+  // around in a circle. The guidance now depends on what else is present.
+  test("missing config with no lock tells the user to run init", () => {
+    try {
+      loadConfig(testDir);
+      throw new Error("expected loadConfig to throw");
+    } catch (e: any) {
+      expect(e.message).toContain("b4mal init");
+      // init makes a lockfile, so the message must not claim it makes a config.
+      expect(e.message).not.toMatch(/init' to create one/i);
+    }
+  });
+
+  test("missing config alongside a lock points at plain build, not init", () => {
+    writeJson(join(testDir, "b4mal.lock"), [{ id: "build", cmd: ["echo"] }]);
+
+    try {
+      loadConfig(testDir);
+      throw new Error("expected loadConfig to throw");
+    } catch (e: any) {
+      // The actionable advice is to drop --sync; re-running init cannot help.
+      expect(e.message).toMatch(/b4mal\.lock already exists/);
+      expect(e.message).toMatch(/run 'b4mal build' to use it/);
+      expect(e.message).toMatch(/init' creates a lockfile, not a config/i);
+      // Must not send the user back to init as the remedy in this case.
+      expect(e.message).not.toMatch(/Run 'b4mal init' to generate/);
+    }
+  });
+
   test("throws on invalid JSON", () => {
     const configPath = join(testDir, "b4mal.config.json");
     writeFileSync(configPath, "{ invalid json }", "utf-8");
@@ -408,7 +439,10 @@ describe("config_loader error paths", () => {
   afterEach(() => { rmSync(testDir, { recursive: true, force: true }); });
 
   test("loadConfig throws when dir has no config file", () => {
-    expect(() => loadConfig(testDir)).toThrow(/not found/);
+    // Wording changed: the message now leads with "No b4mal.config.json found
+    // (searched in …)" and branches its guidance on whether a lock exists. The
+    // detailed guidance is covered by the two tests in the loadConfig block.
+    expect(() => loadConfig(testDir)).toThrow(/No b4mal\.config\.json found/);
   });
 
   test("loadConfig throws on malformed JSON", () => {
