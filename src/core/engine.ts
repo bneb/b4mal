@@ -11,6 +11,7 @@ import { ClusterEngine } from "../discovery/auto_map";
 import { CargoIngester } from "../discovery/cargo_ingester";
 import { GoIngester } from "../discovery/go_ingester";
 import { PythonIngester } from "../discovery/python_ingester";
+import { tasksToConfigWithReport } from "../config_loader";
 import { WavePlanner } from "../orchestrator/planner";
 import { DynamicExecutor, type WaveResult } from "../orchestrator/executor";
 import { FormalShadow } from "../core/formal_shadow";
@@ -53,6 +54,14 @@ export class B4malEngine {
     private readonly lockPath: string;
     private readonly dbPath: string;
     private readonly options: EngineOptions;
+    /**
+     * Edges `init` removed from the discovered graph because the config schema
+     * forbids them (dangling references, or edges that would close a cycle).
+     * Discovery is inference; an edge that does not survive validation is not
+     * trustworthy. The CLI reports these so a pruned graph is never presented as
+     * a clean success.
+     */
+    prunedEdges: string[] = [];
 
     constructor(
         projectRoot: string = process.cwd(),
@@ -85,7 +94,7 @@ export class B4malEngine {
      */
     async init(migratedTasks?: OrchestratorTask[]): Promise<void> {
         if (migratedTasks && migratedTasks.length > 0) {
-            writeFileSync(this.lockPath, JSON.stringify(migratedTasks, null, 2), "utf-8");
+            this.commitInit(migratedTasks);
             return;
         }
 
@@ -114,7 +123,7 @@ export class B4malEngine {
                 envWrites: [],
             }));
 
-            writeFileSync(this.lockPath, JSON.stringify(tasks, null, 2), "utf-8");
+            this.commitInit(tasks);
             return;
         }
 
@@ -133,7 +142,7 @@ export class B4malEngine {
                     envReads: [],
                     envWrites: [],
                 }));
-                writeFileSync(this.lockPath, JSON.stringify(tasks, null, 2), "utf-8");
+                this.commitInit(tasks);
                 return;
             }
         }
@@ -157,7 +166,46 @@ export class B4malEngine {
             envWrites: [],
         }));
 
-        writeFileSync(this.lockPath, JSON.stringify(tasks, null, 2), "utf-8");
+        this.commitInit(tasks);
+    }
+
+    /**
+     * Write the discovered tasks as a b4mal.config.json, then derive b4mal.lock
+     * from that config.
+     *
+     * Both artifacts now come from one source. The lock is not written from the
+     * discovered tasks directly — it is loaded back through the same Zod-validated
+     * path that `b4mal build --sync` uses, so the lock is provably the config's
+     * output and the two cannot drift. That is what makes "the lock is generated;
+     * edit the config" true for a freshly-initialised project, and it is why
+     * `build --sync` has a config to compile after init.
+     *
+     * If a config already exists it is left alone (init must not clobber the
+     * user's authored source of truth) and the lock is derived from it.
+     */
+    private commitInit(discoveredTasks: OrchestratorTask[]): void {
+        const configPath = join(this.projectRoot, "b4mal.config.json");
+
+        if (!existsSync(configPath)) {
+            const { config, prunedEdges } = tasksToConfigWithReport(discoveredTasks);
+            // An empty config cannot load: the schema requires at least one task.
+            // Discovery legitimately finds nothing in an empty or unrecognised
+            // project, and the honest outcome there is an empty lockfile plus a
+            // clear "define your tasks" message — not a config file that errors on
+            // every subsequent command.
+            if (Object.keys(config.tasks ?? {}).length === 0) {
+                writeFileSync(this.lockPath, JSON.stringify([], null, 2), "utf-8");
+                return;
+            }
+            writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
+            this.prunedEdges = prunedEdges;
+        }
+
+        // Derive the lock from the config via the real, validated path.
+        const { loadConfig, configToTasks, writeLockfileAtomic } =
+            require("../config_loader") as typeof import("../config_loader");
+        const tasks = configToTasks(loadConfig(this.projectRoot));
+        writeLockfileAtomic(tasks, this.lockPath);
     }
 
     /**

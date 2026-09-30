@@ -51,7 +51,7 @@ b4mal build --sync   # force-regenerate b4mal.lock from b4mal.config.json
 b4mal analyze        # static HTML observability dashboard
 ```
 
-`b4mal.lock` is a **generated** artifact whenever `b4mal.config.json` is present — edit the config, not the lock. Running `b4mal init` auto-discovers an existing project, and the migration wizard can translate legacy Turborepo, Nx, and Lerna configurations.
+`b4mal init` auto-discovers an existing project and writes **both** files: `b4mal.config.json` (which you edit) and `b4mal.lock` (generated from it). Task ids are normalised — an npm script named `test:unit` becomes the task `test-unit` while still running `npm run test:unit`. The migration wizard translates legacy Turborepo, Nx, and Lerna configurations.
 
 ### Audit a build graph in CI, without switching build systems
 

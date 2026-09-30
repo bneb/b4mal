@@ -131,6 +131,22 @@ async function main() {
                 const migratedTasks = await MigrationWizard.prompt(engine.projectRoot);
                 await engine.init(migratedTasks || undefined);
 
+                // Discovery infers a graph; the config schema is stricter than the
+                // lockfile ever was and rejects dangling edges and cycles. When
+                // inference produced an edge that does not survive, it was
+                // dropped — say so rather than presenting a pruned graph as a
+                // clean success.
+                if (engine.prunedEdges.length > 0) {
+                    warn(`${engine.prunedEdges.length} inferred dependency edge(s) were removed:`);
+                    for (const e of engine.prunedEdges.slice(0, 5)) {
+                        info(`   ${e}`);
+                    }
+                    if (engine.prunedEdges.length > 5) {
+                        info(`   …and ${engine.prunedEdges.length - 5} more`);
+                    }
+                    info("Add these back in b4mal.config.json if they are real dependencies.");
+                }
+
                 // Report what was actually written rather than assuming. init can
                 // legitimately discover nothing (empty project, unrecognised
                 // layout), and telling the user to "edit the cmd arrays" when the
@@ -138,7 +154,6 @@ async function main() {
                 // warn about placeholders when the lock really contains some —
                 // migrated tasks carry real commands.
                 const lockPath = join(engine.projectRoot, "b4mal.lock");
-                const hasConfig = existsSync(join(engine.projectRoot, "b4mal.config.json"));
 
                 let discovered = 0;
                 let placeholders = 0;
@@ -159,19 +174,20 @@ async function main() {
                 if (discovered === 0) {
                     warn("Discovery found no tasks — b4mal.lock is empty.");
                     info("Define your tasks in b4mal.config.json, then run: b4mal build");
-                } else if (hasConfig) {
-                    ok(`b4mal.lock generated — ${discovered} task(s).`);
-                    info("b4mal.lock is generated from b4mal.config.json, so edit the config, not the lock.");
-                    info("Then run: b4mal build");
                 } else if (placeholders > 0) {
-                    ok(`b4mal.lock generated — ${discovered} task(s).`);
+                    // Checked before the config branch: init now always writes a
+                    // config, so keying "is there a config" first hid the
+                    // placeholder warning entirely — a config full of stubs would
+                    // have been reported as a clean success.
+                    ok(`b4mal.config.json + b4mal.lock generated — ${discovered} task(s).`);
                     warn(
                         `${placeholders} of ${discovered} task(s) have placeholder commands and will not build anything.`
                     );
                     info("Declare real commands in b4mal.config.json, then run: b4mal build");
                 } else {
-                    ok(`b4mal.lock generated — ${discovered} task(s), all with real commands.`);
-                    info("Review b4mal.lock, then run: b4mal build");
+                    ok(`b4mal.config.json + b4mal.lock generated — ${discovered} task(s), all with real commands.`);
+                    info("b4mal.lock is generated from b4mal.config.json, so edit the config, not the lock.");
+                    info("Then run: b4mal build");
                 }
                 break;
             }

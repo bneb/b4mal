@@ -2,11 +2,15 @@
 
 ## `b4mal init`
 
-Initialize B4mal in your project. Auto-detects Turborepo, Nx, and Lerna configurations.
+Initialize B4mal in your project. Auto-detects Turborepo, Nx, and Lerna configurations, as well as plain package.json, Cargo, Go and Python projects.
 
 ```bash
 b4mal init
 ```
+
+Writes **both** `b4mal.config.json` and `b4mal.lock`; the lock is generated from the config, so edit the config and re-run `b4mal build --sync`. Task ids are normalised to letters, digits, dashes and underscores, so an npm script named `test:unit` becomes the task `test-unit` while still running `npm run test:unit`. Dependencies inferred from a tool config that would dangle or form a cycle are dropped and reported.
+
+An existing `b4mal.config.json` is never overwritten.
 
 Options:
 - `--from-config` — Generate lockfile from existing `b4mal.config.json`

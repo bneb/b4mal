@@ -1,5 +1,5 @@
 import { readFileSync, existsSync } from "fs";
-import { normalizeNxDependency } from "./nx_migrator";
+import { normalizeNxDependency, normalizeNxPathList } from "./nx_migrator";
 
 export class TurboMigrator {
     /**
@@ -56,8 +56,8 @@ export class TurboMigrator {
                 cmd: ["npm", "run", taskId],
                 deps,
                 claims: [],
-                reads: (def as any).inputs || [],
-                writes: (def as any).outputs || [],
+                reads: normalizeNxPathList((def as any).inputs),
+                writes: normalizeNxPathList((def as any).outputs),
                 envReads: [],
                 envWrites: []
             });

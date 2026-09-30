@@ -60,16 +60,18 @@ correct but nobody has checked, and the docs assert a result anyway.
 
 ## C. Decisions needed
 
-12. **`init` should write a config, not only a lock.** `init` generates
-    `b4mal.lock` and no `b4mal.config.json`, so the stated contract — the lock is a
-    generated artifact, the config is the source of truth — does not hold on a fresh
-    project, and `build --sync` has nothing to compile from. The error guidance was
-    corrected to stop sending users in circles, but the underlying inconsistency
-    remains. Writing a config from init's discovered tasks would fix it, at the cost of
-    a lossless config→lock round trip: `secrets`, `needsEnv` and `when` have each
-    already shipped broken by being dropped in exactly that kind of conversion. Do this
-    as its own change, with a round-trip equality test, and re-run the 35-repo
-    benchmark — not folded into a fix.
+12. ~~**`init` should write a config, not only a lock.**~~ **Done.** `init` now
+    writes `b4mal.config.json` and derives `b4mal.lock` from it through the same
+    Zod-validated path `build --sync` uses, so the lock is provably the config's
+    output and the two cannot drift. Routing discovery through the validated path
+    surfaced three latent defects that the lockfile write had been tolerating, all
+    now fixed and regression-tested: npm script names that are illegal task ids
+    (`test:unit`, `@scope/thing`), Nx/Turbo object-form `inputs`/`outputs`
+    descriptors, and inferred dependency edges that dangle or close a cycle. The
+    config⇄lock round trip is pinned field-by-field in `tests/roundtrip.test.ts`
+    — `secrets`, `needsEnv` and `when` are each named explicitly, because those are
+    the three that have silently broken in exactly this conversion before. The
+    35-repo init benchmark is 35/35 GREEN, 600 tasks.
 13. **Licensing direction.** `minting-station/` is a working Cloudflare Worker that
     mints license keys, and `artifacts/plans/windows-plugin-rust-license.md` plans a
     licensing portal — but the CLI has no license enforcement at all and the project is

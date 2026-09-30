@@ -1,6 +1,46 @@
 import { readFileSync, existsSync } from "fs";
 
 /**
+ * Normalize an Nx target `inputs`/`outputs` entry into a plain string.
+ *
+ * Nx accepts object descriptors, not just strings:
+ *
+ *   "src/[glob].ts"                                    (already a string)
+ *   { "fileset": "{projectRoot}/src/[glob]" }           (a file glob)
+ *   { "env": "NODE_ENV" }                              (an env var name)
+ *
+ * The b4mal config schema requires `inputs`/`outputs` to be string arrays, so an
+ * object entry would fail validation on load. Extract the filesystem meaning
+ * (fileset/glob/root) and drop descriptors that carry none (env, and unknown
+ * shapes) rather than emitting a value that cannot be expressed.
+ */
+export function normalizeNxPathEntry(entry: unknown): string | null {
+    if (typeof entry === "string") return entry;
+    if (entry && typeof entry === "object") {
+        const obj = entry as Record<string, unknown>;
+        const candidate = obj.fileset ?? obj.glob ?? obj.root ?? obj.input ?? obj.output;
+        if (typeof candidate === "string") {
+            // Strip Nx's {projectRoot}/ interpolation to the literal token; b4mal
+            // paths are project-relative.
+            return candidate.replace(/\{projectRoot\}\/?/g, "");
+        }
+        // { env: "FOO" } and any other descriptor carry no filesystem resource.
+        return null;
+    }
+    return null;
+}
+
+export function normalizeNxPathList(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    const out: string[] = [];
+    for (const entry of value) {
+        const normalized = normalizeNxPathEntry(entry);
+        if (normalized) out.push(normalized);
+    }
+    return out;
+}
+
+/**
  * Normalize an Nx `dependsOn` entry to a task id.
  *
  * Nx accepts two shapes and both appear in real workspaces:
@@ -64,8 +104,8 @@ export class NxMigrator {
                 cmd: ["npx", "nx", "run", taskId],
                 deps,
                 claims: [],
-                reads: (def as any).inputs || [],
-                writes: (def as any).outputs || [],
+                reads: normalizeNxPathList((def as any).inputs),
+                writes: normalizeNxPathList((def as any).outputs),
                 envReads: [],
                 envWrites: []
             });

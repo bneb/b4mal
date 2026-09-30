@@ -178,3 +178,48 @@ describe("TurboMigrator — dependsOn robustness", () => {
         await fs.unlink(tmp).catch(() => {});
     });
 });
+
+// ─── Object-shaped inputs/outputs ──────────────────────────────────────────
+//
+// Nx and Turbo both accept object descriptors for a target's inputs/outputs:
+//
+//   { "fileset": "{projectRoot}/src/**/*.ts" }
+//   { "env": "NODE_ENV" }
+//
+// The migrators copied these straight through. That was invisible while they
+// wrote a lockfile directly (no schema behind it) and became a hard failure once
+// init routed everything through the validated config path: the config schema
+// requires `inputs`/`outputs` to be arrays of strings, so a real workspace such
+// as nx-esbuild failed init outright with
+// "tasks.nx-esbuild-esbuild.inputs.2: Expected string, received object".
+
+describe("target inputs/outputs normalization", () => {
+  test("extracts the filesystem value from a fileset descriptor", async () => {
+    const { normalizeNxPathList } = await import("../src/shim/nx_migrator");
+    expect(normalizeNxPathList([{ fileset: "{projectRoot}/src/**/*.ts" }])).toEqual(["src/**/*.ts"]);
+  });
+
+  test("passes plain strings through unchanged", async () => {
+    const { normalizeNxPathList } = await import("../src/shim/nx_migrator");
+    expect(normalizeNxPathList(["src/a.ts", "src/b.ts"])).toEqual(["src/a.ts", "src/b.ts"]);
+  });
+
+  test("drops descriptors that carry no filesystem resource", async () => {
+    const { normalizeNxPathList } = await import("../src/shim/nx_migrator");
+    // An env descriptor is a real Nx input but has no path; emitting it as a
+    // path would be a lie, so it is dropped rather than mangled.
+    expect(normalizeNxPathList([{ env: "NODE_ENV" }, "src/a.ts"])).toEqual(["src/a.ts"]);
+  });
+
+  test("tolerates a non-array value", async () => {
+    const { normalizeNxPathList } = await import("../src/shim/nx_migrator");
+    expect(normalizeNxPathList(undefined)).toEqual([]);
+    expect(normalizeNxPathList("not-an-array")).toEqual([]);
+  });
+
+  test("handles glob and root descriptor keys", async () => {
+    const { normalizeNxPathList } = await import("../src/shim/nx_migrator");
+    expect(normalizeNxPathList([{ glob: "{projectRoot}/dist" }])).toEqual(["dist"]);
+    expect(normalizeNxPathList([{ root: "{projectRoot}/lib" }])).toEqual(["lib"]);
+  });
+});

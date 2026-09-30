@@ -105,6 +105,164 @@ export function loadConfig(projectRoot: string): B4malConfig {
 // ─── configToTasks ─────────────────────────────────────────────────────────
 
 /**
+ * Convert discovered/lockfile tasks into an authored b4mal.config.json object.
+ *
+ * This is the inverse of configToTasks, used by `b4mal init` so a fresh project
+ * gets BOTH artifacts from one source: init writes this config, then derives
+ * b4mal.lock from it through the normal Zod-validated path. The two cannot drift
+ * because the lock is computed from the config, not discovered independently.
+ *
+ * Field handling that matters:
+ *
+ * - Task IDs are sanitized. npm script names are legal but b4mal task IDs are
+ *   not: `test:unit`, `@scope/thing` and `a.b` are real script names that the
+ *   config schema rejects (VALID_TASK_ID allows only alphanumerics, dashes and
+ *   underscores). init used to write those straight into the lock, which has no
+ *   write-time ID check, so they worked; routing them through the validated
+ *   config path is what surfaced it. Sanitizing here keeps every discovered
+ *   project init-able while preserving the exact command, which is what actually
+ *   runs.
+ *
+ * - Lockfile field names are mapped to config names (deps→dependencies,
+ *   reads→inputs, writes→outputs, envReads→needsEnv, envWrites→providesEnv).
+ * - `fs:`-prefixed entries in `claims` are dropped. A discovered task carries the
+ *   same path in both `claims: ["fs:src/x.ts"]` and `reads: ["src/x.ts"]`; the
+ *   planner folds every fs: claim into BOTH reads and writes. Re-emitting both
+ *   would make an input-only task look like it also writes that path, which is a
+ *   false collision. Inputs/outputs already express the fs resource; only
+ *   non-filesystem claims (env:, db:, port:) are carried in `claims`.
+ * - Empty collections are omitted so the emitted config reads like one a human
+ *   wrote — the schema defaults fill the rest.
+ *
+ * PURE — no filesystem access, no side effects.
+ */
+/**
+ * Turn an arbitrary discovered id (often a raw npm script name like
+ * `test:unit`, `@scope/thing`, `a.b`) into a schema-valid b4mal task ID
+ * (alphanumerics, dashes, underscores), guaranteeing uniqueness against ids
+ * already emitted.
+ *
+ * Only the task key changes; the command the task runs is untouched, so
+ * `test:unit` becomes task `test-unit` but still executes `npm run test:unit`.
+ * If sanitising produces a name that collides with an existing id, a numeric
+ * suffix is appended.
+ */
+function uniqueTaskId(rawId: string, existing: Record<string, any>): string {
+  const base = String(rawId)
+    .replace(/[^a-zA-Z0-9_-]/g, "-")
+    .replace(/^-+/, "")      // an id may not start with a dash
+    .replace(/-+$/, "");     // nor end with one
+  let id = base || "task";  // a name of only invalid characters collapses here
+  let n = 2;
+  while (Object.prototype.hasOwnProperty.call(existing, id)) {
+    id = `${base || "task"}-${n++}`;
+  }
+  return id;
+}
+
+export function tasksToConfigWithReport(
+  tasks: any[],
+  projectName?: string,
+): { config: Record<string, any>; prunedEdges: string[] } {
+  const config: Record<string, any> = {};
+  if (projectName) config.name = projectName;
+
+  const list = tasks ?? [];
+
+  // Pass 1 — settle every id before emitting anything, because a sanitised id
+  // has to be remapped in the tasks that depend on it. Sanitising inside the
+  // emit loop would emit `dependsOn: ["test:unit"]` for a task now called
+  // `test-unit`, and that edge would dangle.
+  const idMap = new Map<string, string>();
+  const taken: Record<string, any> = {};
+  for (const raw of list) {
+    const id = uniqueTaskId(String((raw as any).id), taken);
+    idMap.set(String((raw as any).id), id);
+    taken[id] = true;
+  }
+
+  // Pass 2 — emit.
+  //
+  // Discovery produces a *best-effort* graph, and the config schema is stricter
+  // than the lockfile ever was: it rejects dangling edges and cycles. Both were
+  // previously writable into the lock and only discovered at plan time; routing
+  // init through the validated path surfaced them on real repositories.
+  //
+  // An inferred edge that does not hold up is not trustworthy, so it is dropped —
+  // but never silently. Every removed edge is reported so `b4mal init` can tell
+  // the user their graph was pruned instead of claiming a clean success.
+  const allIds = new Set(idMap.values());
+  const pruned: string[] = [];
+  /** Edges accepted so far, used to break cycles deterministically. */
+  const accepted = new Map<string, string[]>();
+
+  const canReach = (from: string, target: string, seen = new Set<string>()): boolean => {
+    if (from === target) return true;
+    if (seen.has(from)) return false;
+    seen.add(from);
+    for (const next of accepted.get(from) ?? []) {
+      if (canReach(next, target, seen)) return true;
+    }
+    return false;
+  };
+
+  const out: Record<string, any> = {};
+  for (const raw of list) {
+    const t = raw as any;
+    const reads: string[] = t.reads ?? t.inputs ?? [];
+    const writes: string[] = t.writes ?? t.outputs ?? [];
+    // Keep only non-filesystem claims; fs paths live in inputs/outputs.
+    const claims: string[] = (t.claims ?? []).filter((c: string) => !String(c).startsWith("fs:"));
+    const envReads: string[] = t.envReads ?? t.needsEnv ?? [];
+    const envWrites: string[] = t.envWrites ?? t.providesEnv ?? [];
+
+    const id = idMap.get(String(t.id))!;
+
+    // Dependencies point at the new ids; keep only those that resolve to a real
+    // task and do not close a cycle. Tasks sorted by id so the result is stable.
+    const requested: string[] = (t.deps ?? t.dependencies ?? []).map((d: string) => idMap.get(d) ?? d);
+    const deps: string[] = [];
+    for (const dep of requested.slice().sort()) {
+      if (!allIds.has(dep)) {
+        pruned.push(`${id} → ${dep} (no such task)`);
+        continue;
+      }
+      if (dep === id || canReach(dep, id)) {
+        pruned.push(`${id} → ${dep} (would create a dependency cycle)`);
+        continue;
+      }
+      deps.push(dep);
+    }
+    accepted.set(id, deps);
+
+    const task: Record<string, any> = { cmd: t.cmd ?? [] };
+    if (deps.length) task.dependencies = deps;
+    if (reads.length) task.inputs = reads;
+    if (writes.length) task.outputs = writes;
+    if (claims.length) task.claims = claims;
+    if (envReads.length) task.needsEnv = envReads;
+    if (envWrites.length) task.providesEnv = envWrites;
+    if ((t.secrets ?? []).length) task.secrets = t.secrets;
+    if (t.env && Object.keys(t.env).length) task.env = t.env;
+    if (t.cwd) task.cwd = t.cwd;
+    if (typeof t.timeout === "number" && t.timeout !== 300_000) task.timeout = t.timeout;
+    if (t.cache === false) task.cache = false;
+    if (t.when) task.when = t.when;
+
+    out[id] = task;
+  }
+
+  config.tasks = out;
+  return { config, prunedEdges: pruned };
+}
+
+export function tasksToConfig(tasks: any[], projectName?: string): Record<string, any> {
+  return tasksToConfigWithReport(tasks, projectName).config;
+}
+
+// ─── configToTasks ─────────────────────────────────────────────────────────
+
+/**
  * Convert a validated B4malConfig into a deterministic, sorted array
  * of TaskConfigWithId suitable for writing to b4mal.lock.
  *

@@ -60,7 +60,11 @@ async function init(cwd: string) {
 
 function lockTasks(cwd: string): any[] {
     const raw = JSON.parse(readFileSync(join(cwd, "b4mal.lock"), "utf-8"));
-    return Array.isArray(raw) ? raw : raw.tasks ?? [];
+    const tasks = Array.isArray(raw) ? raw : raw.tasks ?? [];
+    // init now derives the lock from the config, so it is the v2 envelope and
+    // spells the field `dependencies`; the flat v1 lock used `deps`. Normalise so
+    // assertions do not care which shape is present.
+    return tasks.map((t: any) => ({ ...t, deps: t.deps ?? t.dependencies ?? [] }));
 }
 
 const REAL_WORLD_NX = {
@@ -101,7 +105,11 @@ describe("b4mal init — nx.json with object-form dependsOn", () => {
         const cwd = makeNxProject(REAL_WORLD_NX);
         await init(cwd);
 
-        const knip = lockTasks(cwd).find(t => t.id === "test:knip");
+        // `test:knip` is a real Nx target but not a legal b4mal task id, so init
+        // sanitises the id to `test-knip` while the command still runs the original
+        // Nx target. The dependency edge (object dependsOn → target `build`) is
+        // resolved and preserved.
+        const knip = lockTasks(cwd).find(t => t.id === "test-knip");
         expect(knip).toBeDefined();
         expect(knip.deps).toEqual(["build"]);
         expect(knip.cmd).toEqual(["npx", "nx", "run", "test:knip"]);
@@ -111,10 +119,14 @@ describe("b4mal init — nx.json with object-form dependsOn", () => {
         const cwd = makeNxProject(REAL_WORLD_NX);
         const result = await init(cwd);
 
-        expect(result.output).toMatch(/all with real commands/);
+        // This Nx workspace uses `"dependsOn": ["^build"]`, which normalises to a
+        // build→build self-reference. init now routes the graph through the
+        // config schema, which forbids cycles, so the self-edge is pruned and
+        // reported before the success line. The substantive claim — real
+        // commands, no placeholders — is unaffected.
+        expect(result.output).toMatch(/config.json \+ b4mal.lock generated — \d+ task\(s\), all with real commands/);
         expect(result.output).not.toMatch(/placeholder commands/);
     });
-
     test("a string-only nx.json still migrates", async () => {
         const cwd = makeNxProject({
             targetDefaults: { build: { dependsOn: ["^build"] }, lint: { dependsOn: [] } },
