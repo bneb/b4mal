@@ -1,0 +1,1 @@
+{ "tasks": { "build": { "cmd": ["echo","build"], "outputs": ["dist/x"] }, "patch": { "cmd": ["echo","patch"], "outputs": ["dist/x"] } } }
