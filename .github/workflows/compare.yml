@@ -1,0 +1,101 @@
+# Comparative benchmark: b4mal vs Turborepo vs Nx.
+#
+# Run on a dedicated runner with nothing else executing, because wall-clock
+# numbers on a machine that is also running other work are not measurements.
+#
+# Two reasons this lives in CI rather than being run locally:
+#   - a local machine is rarely idle. On a contended host the same fixed-workload
+#     probe returned 0.19-1.26 G iter/s across three consecutive samples — a 6x
+#     spread, larger than any difference between the tools being compared. Numbers
+#     from that environment are noise, not data.
+#   - a dedicated runner gives a fixed, stated environment (ubuntu-latest, 4 vCPU,
+#     no other jobs), so results are comparable across runs and across time.
+#
+# The harness aborts any tool whose run does not actually produce the expected
+# outputs, so a "win" can never come from a tool silently doing nothing.
+name: Compare
+
+on:
+  # Manual, plus a weekly run so drift in either b4mal or the competitors shows up
+  # without anyone remembering to ask.
+  workflow_dispatch:
+  schedule:
+    - cron: "23 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never two benchmark runs at once — they would contend for the same runner
+  # class and corrupt each other's numbers.
+  group: compare-benchmark
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    name: Wall-clock + correctness (dedicated runner)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Record the environment
+        run: |
+          {
+            echo "### Environment"
+            echo ""
+            echo "- runner: ubuntu-latest, $(nproc) vCPU"
+            echo "- bun: $(bun --version)"
+            echo "- node: $(node --version)"
+            echo "- turbo/nx: installed fresh by the harness"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Proves the runner is not contended before we trust any timing from it.
+      - name: Check the runner is quiet enough to measure on
+        run: |
+          set -euo pipefail
+          bun -e '
+            const N = 200_000_000;
+            const sample = () => { let x = 0; const t = performance.now();
+              for (let i = 0; i < N; i++) x = (x + i) | 0;
+              return N / (performance.now() - t) * 1000 / 1e9; };
+            const runs = Array.from({length: 5}, sample);
+            const min = Math.min(...runs), max = Math.max(...runs);
+            const spread = max / min;
+            console.log(`  single-thread samples: ${runs.map(r => r.toFixed(2)).join(", ")} G iter/s`);
+            console.log(`  min/max spread: ${spread.toFixed(2)}x`);
+            if (spread > 1.5) {
+              console.log(`::error::runner is contended (spread ${spread.toFixed(2)}x); timings from this run would be noise`);
+              process.exit(1);
+            }
+          '
+
+      - name: Run the comparison harness
+        run: bash scripts/bench-compare.sh | tee "$RUNNER_TEMP/compare.txt"
+
+      - name: Publish results
+        if: always()
+        run: |
+          {
+            echo ""
+            echo "### Results"
+            echo ""
+            echo '```'
+            cat "$RUNNER_TEMP/compare.txt" 2>/dev/null || echo "(harness produced no output)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compare-results
+          path: ${{ runner.temp }}/compare.txt
