@@ -1,0 +1,83 @@
+name: Docs
+
+# Publishes the VitePress site to https://bneb.github.io/b4mal/.
+#
+# The docs previously existed only as markdown in the repository: every link in
+# the CLI, the installer and the README pointed somewhere, but nothing was
+# actually served. b4mal.dev is unregistered, so there was no site at all.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deployment at a time: concurrent runs would race to publish the Pages
+# artifact and the older build could win.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run docs:build
+
+      # A broken internal link is a 404 for the person reading the docs, so the
+      # build is not trusted blindly: assert the entry page and a sample of real
+      # pages were emitted before anything is deployed.
+      - name: Verify the build output
+        run: |
+          set -e
+          OUT=docs/.vitepress/dist
+          test -f "$OUT/index.html" || { echo "no index.html in $OUT"; exit 1; }
+          echo "built $(find "$OUT" -name '*.html' | wc -l | tr -d ' ') pages"
+          for page in guide/getting-started guide/installation reference/cli concepts/security-model; do
+            test -f "$OUT/$page.html" || { echo "missing $page.html"; exit 1; }
+          done
+
+      - name: Check the base path is applied
+        run: |
+          # Served under /b4mal/, so absolute asset links must carry the prefix.
+          # A root-absolute href would 404 on GitHub Pages and nowhere else,
+          # which is exactly the kind of bug local preview cannot catch.
+          if grep -q 'href="/b4mal/' docs/.vitepress/dist/index.html; then
+            echo "base /b4mal/ is applied"
+          else
+            echo "::error::base /b4mal/ is not applied to generated links"
+            exit 1
+          fi
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      # Only this job publishes; the build needs nothing but read.
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

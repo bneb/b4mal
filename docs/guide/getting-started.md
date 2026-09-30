@@ -82,7 +82,7 @@ Opens an interactive dashboard showing task timing, cache hit rates, and the dep
 
 ## Next Steps
 
-- [Configuration reference](/guide/configuration) — all task fields explained
-- [Migration from Turborepo](/guide/migration/turborepo)
-- [Understanding resource isolation](/concepts/resource-isolation)
-- [CLI command reference](/reference/cli)
+- [Configuration reference](./configuration.md) — all task fields explained
+- [Migration from Turborepo](./migration/turborepo.md)
+- [Understanding resource isolation](../concepts/resource-isolation.md)
+- [CLI command reference](../reference/cli.md)

@@ -65,7 +65,7 @@ no-op on repositories that do not use b4mal:
     fail-on-findings: false   # start by reporting, not gating
 ```
 
-See [Installation](/guide/installation#github-action) for inputs and outputs.
+See [Installation](https://github.com/bneb/b4mal/blob/main/docs/guide/installation.md#github-action) for inputs and outputs.
 
 ### Autonomous Trace Synthesis
 

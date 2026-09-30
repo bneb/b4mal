@@ -52,7 +52,7 @@ than executed against inputs that were never produced.
 
 **Polyglot init.** `b4mal init` detects Rust, Go and Python projects and generates
 `cargo` / `go` / `pip` commands. Verified across 35 real repositories — see
-[Benchmark Results](/guide/benchmark-results) — where 34 are GREEN and one is
+[Benchmark Results](./benchmark-results.md) — where 34 are GREEN and one is
 YELLOW.
 
 **Artifact handling.** The vault copies through bounded file descriptors with

@@ -55,6 +55,11 @@ function sourceFiles(): string[] {
         }
     };
     walk(SRC);
+    // The VitePress config lives outside src/ and is full of user-facing links —
+    // including, once, the b4mal/b4mal typosquat. Scanning only src/ let that
+    // through even though the check existed precisely to catch it.
+    const vitepress = join(ROOT, "docs", ".vitepress");
+    if (existsSync(vitepress)) walk(vitepress);
     return out;
 }
 

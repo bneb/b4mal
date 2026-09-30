@@ -165,7 +165,7 @@ echoed back in `caller`.
 | Variable | Purpose |
 |----------|---------|
 | `B4MAL_DB_PATH` | Override SQLite ledger path |
-| `B4MAL_CACHE_SECRET` | HMAC key for remote artifact signing. Set it and pushes are signed and pulls verified; unset means the remote cache is unauthenticated. See [Caching](/concepts/caching). |
+| `B4MAL_CACHE_SECRET` | HMAC key for remote artifact signing. Set it and pushes are signed and pulls verified; unset means the remote cache is unauthenticated. See [Caching](../concepts/caching.md). |
 | `AWS_ACCESS_KEY_ID` | S3 access key for L2 cache |
 | `AWS_SECRET_ACCESS_KEY` | S3 secret key for L2 cache |
 | `AWS_REGION` | S3 region |
@@ -176,4 +176,4 @@ echoed back in `caller`.
 
 `B4MAL_STRICT_SANDBOX` was listed here previously as "Enable OS-level sandboxing".
 It is not read by any code — setting it has no effect. Sandboxing is not
-implemented; see the [security model](/concepts/security-model).
+implemented; see the [security model](../concepts/security-model.md).

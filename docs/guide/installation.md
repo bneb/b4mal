@@ -56,7 +56,7 @@ use `@bneb/b4mal`.
 
 There is no failure sandbox on any platform — failed tasks leave their partial writes
 in place and only their dependents are skipped. See the
-[security model](/concepts/security-model).
+[security model](../concepts/security-model.md).
 
 **Trace synthesis** is Linux-only. On macOS and Windows it cannot run natively; use a
 Linux container with `--cap-add=SYS_PTRACE` if you need it.

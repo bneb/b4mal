@@ -39,5 +39,5 @@ features:
 ---
 
 ::: warning Not yet implemented
-Two features are described in older design notes but are **not implemented**: failure sandboxing into `.b4mal/shadow/<taskId>` (no clone-on-failure workspace exists — see [the security model](/concepts/security-model)), and `b4mal trace` on macOS or Windows, which is Linux-only. This page lists what the code does today.
+Two features are described in older design notes but are **not implemented**: failure sandboxing into `.b4mal/shadow/<taskId>` (no clone-on-failure workspace exists — see [the security model](./concepts/security-model.md)), and `b4mal trace` on macOS or Windows, which is Linux-only. This page lists what the code does today.
 :::

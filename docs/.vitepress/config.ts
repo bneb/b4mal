@@ -5,6 +5,12 @@ export default defineConfig({
   description: "Fast, deterministic build orchestrator for monorepos",
   lang: "en-US",
   cleanUrls: true,
+  // Served from https://bneb.github.io/b4mal/ by the Pages workflow. VitePress
+  // prefixes this onto nav, sidebar, logo and asset links, but NOT onto raw
+  // markdown links — so in-page links are relative .md paths rather than
+  // root-absolute ones, which would 404 under this prefix.
+  base: "/b4mal/",
+  srcExclude: ["**/README.md"],
 
   themeConfig: {
     logo: "/logo.svg",
@@ -12,7 +18,9 @@ export default defineConfig({
       { text: "Guide", link: "/guide/getting-started" },
       { text: "Concepts", link: "/concepts/determinism" },
       { text: "Reference", link: "/reference/cli" },
-      { text: "GitHub", link: "https://github.com/b4mal/b4mal" },
+      // b4mal/b4mal is a typosquat, not us. The documentation-claims audit
+      // missed this because it only reads markdown files.
+      { text: "GitHub", link: "https://github.com/bneb/b4mal" },
     ],
     sidebar: {
       "/guide/": [
@@ -39,7 +47,7 @@ export default defineConfig({
       ],
     },
     socialLinks: [
-      { icon: "github", link: "https://github.com/b4mal/b4mal" },
+      { icon: "github", link: "https://github.com/bneb/b4mal" },
     ],
     search: { provider: "local" },
     footer: {
