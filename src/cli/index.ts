@@ -626,9 +626,12 @@ function printUsage(): void {
     process.stdout.write(`
   ${c.bold}b4mal${c.reset} — Core Build Engine v${getVersion()}
 
+  ${c.dim}Requires the Bun runtime (https://bun.sh). Prebuilt release binaries are
+  self-contained; installing from npm still needs Bun available at runtime.${c.reset}
+
   ${c.bold}Usage:${c.reset}
     b4mal demo           🛑 See the engine intercept a race condition live (start here)
-    b4mal init           Discover source files → b4mal.lock
+    b4mal init           Discover source files → b4mal.config.json + b4mal.lock
     b4mal check          Verify DAG correctness (collisions + shadowing, no execution)
     b4mal setup ci       Generate zero-configuration GitHub Actions workflow
     b4mal build          Prove + execute DAG (cache-aware)

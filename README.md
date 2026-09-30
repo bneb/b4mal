@@ -2,6 +2,10 @@
 
 B4mal is a fast, deterministic build system and orchestrator for monorepos. It is designed around a strict model of task dependencies to guarantee reproducibility, parallel execution safety, and cache correctness.
 
+> **Requires [Bun](https://bun.sh).** B4mal is deliberately Bun-only. Prebuilt release
+> binaries are self-contained and need no runtime install; installing from npm still
+> requires Bun to be available at runtime.
+
 ## Design Philosophy
 
 The core invariant of B4mal is determinism. If a task is executed with the exact same inputs, it must yield the exact same outputs. To achieve this, B4mal completely rejects implicit dependencies. Every file read, file write, and environment variable must be explicitly declared in the task configuration.
