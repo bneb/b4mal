@@ -87,6 +87,60 @@ The `trace` command intercepts `execve`, `openat`, and `clone` system calls via 
 
 *Note: Once `b4mal.ts` is synthesized, the resulting DAG can be executed (`b4mal build`) natively on any OS.*
 
+## Comparisons
+
+Measured against Turborepo and Nx on an identical fixture: 8 packages × (build +
+test) = 16 tasks, each doing non-elidable work (SHA-256 over 256KB) seeded per
+package. Reproduce with `scripts/bench-compare.sh`.
+
+### Correctness — where this differs categorically
+
+Two tasks declaring the **same output file**, each truncating it, pausing, then
+finishing. Run concurrently, the file tears; serialised, it stays whole.
+
+| Tool | Consistent | Torn |
+|---|---|---|
+| **b4mal** | **5 / 5** | **0** |
+| Turborepo | 0 / 5 | **5** |
+
+Turborepo tore the file on every run — e.g. `B-HEAD│A-TAIL│B-TAIL`, one task's tail
+landing inside another's write. b4mal never did: declared outputs feed a prefix
+tree, which injects a dependency so the tasks never overlap.
+
+This does not depend on task duration or graph size. It is the difference between
+"the DAG happened to be correct" and "the scheduler guarantees it."
+
+### Performance — comparable, and behind on warm cache
+
+Median of 3 runs, local cache only, no remote cache on any side:
+
+| Tool | Cold | Warm |
+|---|---|---|
+| b4mal | 1.88s | 0.39s |
+| Turborepo | 1.73s | **0.17s** |
+| Nx | ~5–6s first run, 0.75s after | 0.67s |
+
+**b4mal does not win on wall-clock.** Cold is a tie; on a warm cache Turborepo is
+roughly 2× faster. Reporting otherwise would not survive anyone running this.
+
+Three caveats that materially affect these numbers:
+
+- **Turbo and Nx keep daemons warm between runs.** Their second and third "cold"
+  runs are daemon-warm; b4mal has no daemon, so every cold run is honestly cold.
+  Nx's first run genuinely costs ~5–6s, which a median of three hides.
+- **Warm restore was 4.4× slower until recently** — process spawn dominated, not
+  architecture. Restoring an artifact spawned `zstd` plus `tar` twice at ~40ms each.
+  Decompression is now native; 1.72s → 0.39s for 16 artifacts. Closing the rest of
+  the gap means eliminating `tar` from the restore path.
+- **This is a small fixture on one machine** (Apple M4, 10 cores). It measures
+  orchestrator overhead against real task durations, not a real monorepo. Treat it
+  as indicative, not publishable.
+
+### The honest summary
+
+On speed b4mal is a close second. On correctness it is the only one of the three
+that can promise anything, because it is the only one that checks.
+
 ## Not Yet Implemented
 
 Documented in some design notes in this repository, but **not implemented in the code**. Do not rely on these:
