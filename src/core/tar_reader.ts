@@ -41,9 +41,11 @@ export interface TarEntry {
 function readString(bytes: Uint8Array, offset: number, length: number): string {
   let end = offset + length;
   while (end > offset && bytes[end - 1] === 0) end--;
-  let out = "";
-  for (let i = offset; i < end; i++) out += String.fromCharCode(bytes[i]);
-  return out;
+  // Decode as UTF-8, not byte-by-byte Latin-1. Building the string with
+  // String.fromCharCode per byte mangles any multi-byte filename, which
+  // round-trips on macOS only because HFS+ normalises them and re-encodes —
+  // on Linux a UTF-8 path extracted under its mojibake name ENOENTs.
+  return new TextDecoder("utf-8").decode(bytes.subarray(offset, end));
 }
 
 function readOctal(bytes: Uint8Array, offset: number, length: number): number {

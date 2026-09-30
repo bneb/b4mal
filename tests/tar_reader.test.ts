@@ -165,6 +165,34 @@ describe("tar reader — agrees with the system tar", () => {
     expect(readFileSync(join(dest, "nulfile.txt"), "utf-8")).toBe("hello");
   });
 
+
+  test("round-trips non-ASCII filenames", async () => {
+    // Header names are raw bytes. Decoding them per-byte (Latin-1) yields
+    // mojibake, which macOS masks because the filesystem re-encodes; on Linux a
+    // UTF-8 filename extracts under its mangled name and ENOENTs. CI caught this
+    // on Linux only.
+    const names = ["üñïçødé.txt", "日本語/ファイル.txt", "with space.txt"];
+    const bytes = makeArchive(names.map(n => ({ path: n, content: `content:${n}` })));
+    const dest = join(dir, "unout");
+    mkdirSync(dest, { recursive: true });
+    await extractTar(bytes, dest);
+    for (const n of names) {
+      expect(readFileSync(join(dest, n), "utf-8")).toBe(`content:${n}`);
+    }
+  });
+
+  test("round-trips nested directories and an empty file", async () => {
+    const bytes = makeArchive([
+      { path: "deeply/nested/path/file.txt", content: "deep" },
+      { path: "empty.txt", content: "" },
+    ]);
+    const dest = join(dir, "deepout");
+    mkdirSync(dest, { recursive: true });
+    await extractTar(bytes, dest);
+    expect(readFileSync(join(dest, "deeply/nested/path/file.txt"), "utf-8")).toBe("deep");
+    expect(readFileSync(join(dest, "empty.txt"), "utf-8")).toBe("");
+  });
+
   test("an empty archive yields no entries and does not throw", () => {
     expect(readTarEntries(new Uint8Array(1024))).toEqual([]);
   });
