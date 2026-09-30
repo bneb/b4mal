@@ -199,20 +199,7 @@ async function main() {
             // ── build ─────────────────────────────────────────────────────────
             case "build": {
                 banner("Engaging Wave Orchestrator…");
-
-                // Check for b4mal.config.json and sync if needed
-                const syncFlag = values.sync || values["from-config"];
-                const configPath = join(process.cwd(), "b4mal.config.json");
-                if (syncFlag || existsSync(configPath)) {
-                  const { loadConfig, configToTasks, writeLockfileAtomic, isConfigStale } = await import("../config_loader");
-                  if (syncFlag || isConfigStale(process.cwd())) {
-                    info("Loading b4mal.config.json...");
-                    const config = loadConfig(process.cwd());
-                    const tasks = configToTasks(config);
-                    writeLockfileAtomic(tasks, join(process.cwd(), "b4mal.lock"));
-                    if (syncFlag) info("Lockfile regenerated from config (--sync).");
-                  }
-                }
+                await syncLockFromConfig(process.cwd(), values.sync || values["from-config"]);
 
                 const dryRun = values["dry-run"];
                 const opts = { force: values.force, strict: values.strict };
@@ -319,6 +306,11 @@ async function main() {
                 const jsonMode = values.json;
                 const isGHA = process.env.GITHUB_ACTIONS === "true";
 
+                // Compile the lockfile from the config first, exactly as build
+                // does, so `check` verifies what the user actually edited rather
+                // than a stale or absent lockfile.
+                await syncLockFromConfig(process.cwd(), false);
+
                 if (!jsonMode) {
                     banner("Verifying DAG Correctness…");
                     info("Checking resource isolation and shadowing without executing tasks.");
@@ -359,8 +351,16 @@ async function main() {
                 if (jsonMode) {
                     process.stdout.write(JSON.stringify({
                         verified: issues === 0,
+                        taskCount: plan.totalTasks,
                         collisions: plan.conflicts.length,
                         shadows: shadows.length,
+                        // Reported so tooling can tell "checked and clean" from
+                        // "nothing to check". An empty DAG verifies vacuously,
+                        // and calling that verified without saying so is the kind
+                        // of assurance this command exists to avoid giving.
+                        note: plan.totalTasks === 0
+                            ? "no tasks in the lockfile — nothing was verified"
+                            : undefined,
                         findings,
                     }, null, 2) + "\n");
                 } else if (isGHA) {
@@ -370,7 +370,9 @@ async function main() {
                         process.stdout.write(`::${cmd}::${f.message}\n`);
                     }
                     if (issues === 0) {
-                        process.stdout.write(`::notice::DAG verified — no collisions, no shadowing.\n`);
+                        process.stdout.write(plan.totalTasks === 0
+                            ? `::warning::b4mal check found no tasks in b4mal.lock — nothing was verified.\n`
+                            : `::notice::DAG verified — no collisions, no shadowing.\n`);
                     }
                 } else {
                     for (const f of findings) {
@@ -391,12 +393,18 @@ async function main() {
                             );
                         }
                     }
-                    if (issues === 0) {
-                        ok("DAG verified — no collisions, no shadowing.");
-                    } else {
+                    if (issues > 0) {
                         process.stdout.write(`\n   ${c.red}${issues} issue(s) found.${c.reset}\n`);
                         process.stdout.write(`   ${c.dim}Docs: https://github.com/bneb/b4mal/blob/main/docs/concepts/resource-isolation.md${c.reset}\n`);
                         process.stdout.write(`   ${c.dim}Run 'b4mal build' to execute after fixing the above.${c.reset}\n\n`);
+                    } else if (plan.totalTasks === 0) {
+                        // Not "verified": an empty DAG verifies vacuously, and
+                        // reporting that as success hides a lockfile that is empty
+                        // because generation went wrong.
+                        warn("b4mal.lock contains no tasks — nothing was verified.");
+                        info("Declare tasks in b4mal.config.json, then run: b4mal build --sync");
+                    } else {
+                        ok("DAG verified — no collisions, no shadowing.");
                     }
                 }
 
@@ -569,6 +577,34 @@ async function main() {
 }
 
 // ─── Usage ───────────────────────────────────────────────────────────────────
+
+// ─── Config → lockfile sync ─────────────────────────────────────────────────
+
+/**
+ * Regenerate b4mal.lock from b4mal.config.json when the config is newer (or when
+ * explicitly asked).
+ *
+ * Shared by `build` and `check`. `check` previously skipped this and read the
+ * lockfile directly, so the workflow the README documents — write a config, then
+ * `b4mal check` — failed with "No b4mal.lock found" even though `build` worked
+ * straight away. A verifier that cannot see the file the user edited is not
+ * verifying what they think it is.
+ */
+async function syncLockFromConfig(projectRoot: string, force: boolean): Promise<void> {
+    const configPath = join(projectRoot, "b4mal.config.json");
+    if (!force && !existsSync(configPath)) return;
+
+    const { loadConfig, configToTasks, writeLockfileAtomic, isConfigStale } = await import("../config_loader");
+    if (!force && !isConfigStale(projectRoot)) return;
+
+    // Written to stderr, not stdout. This is progress, and stdout belongs to the
+    // command's actual output — with `info()` here, `b4mal check --json` emitted
+    // this line before its JSON payload and no longer parsed.
+    process.stderr.write(`${c.dim}   Loading b4mal.config.json...${c.reset}\n`);
+    const tasks = configToTasks(loadConfig(projectRoot));
+    writeLockfileAtomic(tasks, join(projectRoot, "b4mal.lock"));
+    if (force) process.stderr.write(`${c.dim}   Lockfile regenerated from config (--sync).${c.reset}\n`);
+}
 
 function printUsage(): void {
     process.stdout.write(`

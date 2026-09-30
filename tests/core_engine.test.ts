@@ -29,10 +29,13 @@ describe("core/engine.ts", () => {
         // Without lockfile
         expect(engine.shadow()).rejects.toThrow("No b4mal.lock found.");
 
-        // With lockfile
+        // With lockfile. Tasks carry a `cmd` because the lockfile is now
+        // validated as the executable artifact it is — an entry with no command
+        // is rejected at load rather than silently producing a task that does
+        // nothing.
         writeFileSync(join(tmpDir, "b4mal.lock"), JSON.stringify([
-            { id: "A", deps: [], writes: ["fs:dist"] },
-            { id: "B", deps: ["A"], writes: ["fs:dist"] }
+            { id: "A", cmd: ["echo", "a"], deps: [], writes: ["fs:dist"] },
+            { id: "B", cmd: ["echo", "b"], deps: ["A"], writes: ["fs:dist"] }
         ]));
         
         const shadows = await engine.shadow();

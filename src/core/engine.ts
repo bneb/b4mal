@@ -164,6 +164,24 @@ export class B4malEngine {
      * Normalize raw lockfile JSON (old flat array or new envelope format)
      * into a unified TaskConfigWithId array with canonical field names.
      */
+    /**
+     * Read and parse b4mal.lock, naming the file when it cannot be parsed.
+     *
+     * A bare JSON.parse surfaced as "JSON Parse error: Expected '}'" with no
+     * indication of which file, which is unhelpful when a project has both a
+     * config and a lockfile and only one of them is broken.
+     */
+    private readLockfile(): any {
+      const text = readFileSync(this.lockPath, "utf-8");
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        throw new Error(
+          `Failed to parse b4mal.lock: ${e instanceof Error ? e.message : String(e)}`
+        );
+      }
+    }
+
     private normalizeLockTasks(raw: any): TaskConfigWithId[] {
       let entries: any[];
       if (Array.isArray(raw)) {
@@ -172,27 +190,47 @@ export class B4malEngine {
         entries = raw.tasks ?? [];
       }
 
-      return entries.map((t: any) => ({
-        id: String(t.id ?? ""),
-        cmd: t.cmd ?? [],
-        dependencies: t.deps ?? t.dependencies ?? [],
-        inputs: t.reads ?? t.inputs ?? [],
-        outputs: t.writes ?? t.outputs ?? [],
-        claims: t.claims ?? [],
-        needsEnv: t.envReads ?? t.needsEnv ?? [],
-        providesEnv: t.envWrites ?? t.providesEnv ?? [],
-        secrets: t.secrets ?? [],
-        env: t.env ?? {},
-        cwd: t.cwd,
-        timeout: t.timeout ?? 300_000,
-        cache: t.cache ?? true,
-        // `when` was written into the lockfile and then dropped here, so every
-        // build read the lock, lost the field, and ran tasks that were supposed
-        // to be skipped. The gate itself was correct and unreachable — the same
-        // shape of bug as `secrets` and `needsEnv` before it: a field present in
-        // TaskConfigWithId but missing from the lockfile round trip.
-        when: t.when,
-      }));
+      return entries.map((t: any, index: number) => {
+        // The lockfile is what actually gets executed, and it is read straight
+        // off disk — config files are validated by Zod, lockfiles were not
+        // validated at all. A hand-edited or corrupted lock silently produced a
+        // task with an empty id and a one-character command ("echo hi" read as an
+        // array yields "e"), and `check` reported the DAG as verified. Entries are
+        // rejected with their index so the offending task can be found.
+        const id = String(t?.id ?? "").trim();
+        if (!id) {
+          throw new Error(`Invalid b4mal.lock: task at index ${index} has no "id".`);
+        }
+
+        const cmd = t.cmd;
+        if (!Array.isArray(cmd) || cmd.length === 0 || cmd.some((c: unknown) => typeof c !== "string")) {
+          throw new Error(
+            `Invalid b4mal.lock: task "${id}" must have a non-empty "cmd" array of strings.`
+          );
+        }
+
+        return {
+          id,
+          cmd,
+          dependencies: t.deps ?? t.dependencies ?? [],
+          inputs: t.reads ?? t.inputs ?? [],
+          outputs: t.writes ?? t.outputs ?? [],
+          claims: t.claims ?? [],
+          needsEnv: t.envReads ?? t.needsEnv ?? [],
+          providesEnv: t.envWrites ?? t.providesEnv ?? [],
+          secrets: t.secrets ?? [],
+          env: t.env ?? {},
+          cwd: t.cwd,
+          timeout: t.timeout ?? 300_000,
+          cache: t.cache ?? true,
+          // `when` was written into the lockfile and then dropped here, so every
+          // build read the lock, lost the field, and ran tasks that were supposed
+          // to be skipped. The gate itself was correct and unreachable — the same
+          // shape of bug as `secrets` and `needsEnv` before it: a field present in
+          // TaskConfigWithId but missing from the lockfile round trip.
+          when: t.when,
+        };
+      });
     }
 
     /**
@@ -239,7 +277,7 @@ export class B4malEngine {
       if (!existsSync(this.lockPath)) {
         throw new Error(`No b4mal.lock found. Run 'b4mal init' first.\n  Docs: https://github.com/bneb/b4mal/blob/main/docs/guide/getting-started.md`);
       }
-      const raw = JSON.parse(readFileSync(this.lockPath, "utf-8"));
+      const raw = this.readLockfile();
       const lockTasks = this.normalizeLockTasks(raw);
       const tasks: OrchestratorTask[] = lockTasks.map(t => ({
         id: t.id, cmd: t.cmd,
@@ -283,7 +321,7 @@ export class B4malEngine {
             );
         }
 
-        const raw = JSON.parse(readFileSync(this.lockPath, "utf-8"));
+        const raw = this.readLockfile();
         const lockTasks = this.normalizeLockTasks(raw);
 
         // Convert to OrchestratorTask for planner compatibility
@@ -375,7 +413,7 @@ export class B4malEngine {
             throw new Error(`No b4mal.lock found.`);
         }
 
-        const raw = JSON.parse(readFileSync(this.lockPath, "utf-8"));
+        const raw = this.readLockfile();
         const lockTasks = this.normalizeLockTasks(raw);
 
         const claims = lockTasks.map(t => ({
@@ -402,7 +440,7 @@ export class B4malEngine {
             throw new Error(`No b4mal.lock found. Run 'b4mal init' first.\n  Docs: https://github.com/bneb/b4mal/blob/main/docs/guide/getting-started.md`);
         }
 
-        const raw = JSON.parse(readFileSync(this.lockPath, "utf-8"));
+        const raw = this.readLockfile();
         const lockTasks = this.normalizeLockTasks(raw);
 
         // Convert to OrchestratorTask for planner compatibility
