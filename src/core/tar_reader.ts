@@ -145,7 +145,11 @@ export function readTarEntries(bytes: Uint8Array): TarEntry[] {
     }
 
     const isDir = typeFlag === "5" || name.endsWith("/");
-    const isFile = typeFlag === "" || typeFlag === "0";
+    // A regular file is flagged '0', but the original v7 convention — and GNU tar
+    // on Linux — leaves the type byte as NUL. `String.fromCharCode(0)` is "\0",
+    // not "", so the empty-string check below never matched and every v7-format
+    // archive was rejected. Both spellings mean "regular file".
+    const isFile = typeFlag === "" || typeFlag === "\0" || typeFlag === "0";
     if (!isDir && !isFile) {
       throw new Error(`archive contains an unsupported entry type '${typeFlag}'`);
     }

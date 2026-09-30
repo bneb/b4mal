@@ -130,6 +130,41 @@ describe("tar reader — agrees with the system tar", () => {
     expect(statSync(join(dest, "data.txt")).mode & 0o111).toBeFalsy();
   });
 
+
+  test("accepts the v7/NUL typeflag for regular files", async () => {
+    // The original v7 convention — and GNU tar on Linux — leaves the type byte as
+    // NUL rather than '0'. The first implementation checked for "" and so
+    // rejected every v7-format archive; CI caught it on Linux while macOS (bsdtar,
+    // which writes '0') passed. Archive one with a NUL type byte directly.
+    const buf = new Uint8Array(1024);
+    const set = (off: number, str: string, len = str.length) => {
+      for (let i = 0; i < len; i++) buf[off + i] = str.charCodeAt(i);
+    };
+    set(0, "nulfile.txt", 100);
+    set(100, "0000644", 8);
+    set(108, "0000000", 8);
+    set(116, "0000000", 8);
+    set(124, "00000000005 ", 12);   // size 5, octal
+    set(136, "00000000000 ", 12);
+    set(148, "        ", 8);
+    buf[156] = 0;                    // NUL typeflag == regular file
+    set(257, "ustar", 6);
+    set(263, "00", 2);
+    let sum = 0; for (let i = 0; i < 512; i++) sum += buf[i];
+    set(148, sum.toString(8).padStart(6, "0") + "\0 ", 8);
+    const body = "hello";
+    for (let i = 0; i < body.length; i++) buf[512 + i] = body.charCodeAt(i);
+
+    const entries = readTarEntries(buf);
+    expect(entries.length).toBe(1);
+    expect(entries[0].type).toBe("file");
+
+    const dest = join(dir, "nulout");
+    mkdirSync(dest, { recursive: true });
+    await extractTar(buf, dest);
+    expect(readFileSync(join(dest, "nulfile.txt"), "utf-8")).toBe("hello");
+  });
+
   test("an empty archive yields no entries and does not throw", () => {
     expect(readTarEntries(new Uint8Array(1024))).toEqual([]);
   });
