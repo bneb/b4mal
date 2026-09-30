@@ -171,9 +171,13 @@ describe("WaveExecutor - Edge Cases", () => {
             // On Linux, it runs normally
             expect(results[0].exitCode).toBe(0);
         } else {
-            // On macOS/Windows, it's skipped
+            // On macOS/Windows, it's skipped. Reported as a condition skip, not a
+            // cache hit: nothing was restored and nothing ran. This assertion
+            // previously required `cached: true`, which is what made the CLI print
+            // "↩ (cached)" and count a skipped task among its cache hits.
             expect(results[0].stdout).toContain("skipped");
-            expect(results[0].cached).toBe(true);
+            expect(results[0].skippedByCondition).toBe(true);
+            expect(results[0].cached).toBe(false);
         }
     });
 
@@ -190,6 +194,8 @@ describe("WaveExecutor - Edge Cases", () => {
         expect(results.length).toBe(1);
         expect(results[0].stdout).toContain("skipped");
         expect(results[0].stdout).toContain("feature/test");
+        expect(results[0].skippedByCondition).toBe(true);
+        expect(results[0].cached).toBe(false);
         delete process.env.GIT_BRANCH;
     });
 

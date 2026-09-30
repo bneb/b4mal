@@ -30,6 +30,12 @@ export interface WaveResult {
      * unsuccessful, but the CLI renders it as skipped rather than failed.
      */
     skipped?: boolean;
+    /**
+     * True when the task was skipped by its own `when` condition (platform or
+     * branch). Distinct from `skipped`, which means a dependency failed. Not a
+     * cache hit: nothing was restored, nothing ran.
+     */
+    skippedByCondition?: boolean;
 }
 
 export interface ExecutorConfig {
@@ -228,6 +234,42 @@ export class DynamicExecutor {
 
         const skipCache = config?.force === true;
 
+        // ── Conditional execution: skip if when conditions not met ─────
+        //
+        // This sits BEFORE the cache checks, deliberately. The cache key is the
+        // task's command plus its declared inputs — it does not include `when` —
+        // so a task gated to one platform shares a key with the same task on
+        // another. Evaluated after the caches (where it used to sit), an L2
+        // artifact produced on Linux would be restored on macOS for a task that is
+        // supposed to be skipped there, reporting success and writing outputs that
+        // should never have existed on that machine.
+        if (task.when) {
+          const w = task.when;
+          if (w.platform && !w.platform.includes(process.platform)) {
+            return {
+              taskId: task.id, exitCode: 0,
+              stdout: `[skipped — platform ${process.platform} not in ${w.platform}]`,
+              stderr: "", durationMs: 0,
+              // Not a cache hit: nothing was restored and nothing ran. Reporting
+              // `cached: true` here made the CLI print "↩ (cached)" and count the
+              // task among its cache hits, which is not what happened.
+              cached: false, skippedByCondition: true,
+            };
+          }
+          if (w.branch) {
+            const branch = process.env.GIT_BRANCH || process.env.CI_COMMIT_BRANCH || "";
+            const matches = branch === w.branch || new RegExp(`^${w.branch.replace(/\*/g, ".*")}$`).test(branch);
+            if (branch && !matches) {
+              return {
+                taskId: task.id, exitCode: 0,
+                stdout: `[skipped — branch "${branch}" doesn't match "${w.branch}"]`,
+                stderr: "", durationMs: 0,
+                cached: false, skippedByCondition: true,
+              };
+            }
+          }
+        }
+
         // ── L2: Remote Cache Check (before L1 — shared cache is fresher) ─
         if (!skipCache && logicHash && config?.remoteVault && projectRoot) {
           try {
@@ -303,29 +345,6 @@ export class DynamicExecutor {
         }
 
 
-
-        // ── Conditional execution: skip if when conditions not met ─────
-        if (task.when) {
-          const w = task.when;
-          if (w.platform && !w.platform.includes(process.platform)) {
-            return {
-              taskId: task.id, exitCode: 0,
-              stdout: `[skipped — platform ${process.platform} not in ${w.platform}]`,
-              stderr: "", durationMs: 0, cached: true,
-            };
-          }
-          if (w.branch) {
-            const branch = process.env.GIT_BRANCH || process.env.CI_COMMIT_BRANCH || "";
-            const matches = branch === w.branch || new RegExp(`^${w.branch.replace(/\*/g, ".*")}$`).test(branch);
-            if (branch && !matches) {
-              return {
-                taskId: task.id, exitCode: 0,
-                stdout: `[skipped — branch "${branch}" doesn't match "${w.branch}"]`,
-                stderr: "", durationMs: 0, cached: true,
-              };
-            }
-          }
-        }
 
         // ── Cache Miss: Execute ───────────────────────────────────────
         const start = performance.now();

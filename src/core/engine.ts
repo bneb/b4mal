@@ -186,6 +186,12 @@ export class B4malEngine {
         cwd: t.cwd,
         timeout: t.timeout ?? 300_000,
         cache: t.cache ?? true,
+        // `when` was written into the lockfile and then dropped here, so every
+        // build read the lock, lost the field, and ran tasks that were supposed
+        // to be skipped. The gate itself was correct and unreachable — the same
+        // shape of bug as `secrets` and `needsEnv` before it: a field present in
+        // TaskConfigWithId but missing from the lockfile round trip.
+        when: t.when,
       }));
     }
 

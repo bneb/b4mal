@@ -247,13 +247,18 @@ async function main() {
                     process.exit(1);
                 }
 
-                // Summary
-                const hits   = result.results.filter(r => r.cached).length;
-                const misses = result.results.filter(r => !r.cached).length;
+                // Summary. Tasks skipped by their own `when` condition are
+                // excluded from both counts: they were neither restored nor
+                // executed, and reporting them as either is misleading.
+                const conditionSkipped = result.results.filter(r => r.skippedByCondition).length;
+                const hits   = result.results.filter(r => r.cached && !r.skippedByCondition).length;
+                const misses = result.results.filter(r => !r.cached && !r.skippedByCondition).length;
 
                 for (const r of result.results) {
-                    if (r.cached) {
+                    if (r.cached && !r.skippedByCondition) {
                         process.stdout.write(`${c.cyan}${c.dim}   ↩ ${r.taskId} (cached)${c.reset}\n`);
+                    } else if (r.skippedByCondition) {
+                        process.stdout.write(`${c.dim}   ⊘ ${r.taskId} (skipped — when condition not met)${c.reset}\n`);
                     } else if (r.skipped) {
                         process.stdout.write(`${c.yellow}   ⊘ ${r.taskId} (skipped — dependency failed)${c.reset}\n`);
                     } else if (r.exitCode !== 0) {
@@ -265,7 +270,12 @@ async function main() {
                     }
                 }
 
-                if (hits > 0) info(`${hits} task(s) restored from cache — ${misses} executed.`);
+                if (hits > 0) {
+                    const skippedNote = conditionSkipped > 0 ? `, ${conditionSkipped} skipped by condition` : "";
+                    info(`${hits} task(s) restored from cache — ${misses} executed${skippedNote}.`);
+                } else if (conditionSkipped > 0) {
+                    info(`${conditionSkipped} task(s) skipped by condition — ${misses} executed.`);
+                }
 
                 if (!result.success) {
                     const skippedCount = result.results.filter(r => r.skipped).length;
