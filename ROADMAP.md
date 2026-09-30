@@ -53,8 +53,9 @@ correct but nobody has checked, and the docs assert a result anyway.
     whether a bare target resolves at a workspace root is unverified — if it does not,
     it should be `run-many -t <target>`.
 11. **The L1 vault is keyed by absolute project path** (`~/.b4mal/artifacts/<sha256(projectRoot)>`),
-    so a relocated checkout, or a CI job whose workspace path differs run to run,
-    reuses nothing locally. L2 is unaffected (it keys on the logic hash).
+    so moving or re-cloning a checkout on a developer machine reuses nothing locally —
+    every relocated project starts cold. L2 is unaffected (it keys on the logic hash),
+    and CI is barely affected because a job's local disk is discarded anyway.
     `ARCHITECTURE.md` notes this.
 
 ## C. Decisions needed

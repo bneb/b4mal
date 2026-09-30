@@ -43,15 +43,30 @@ export interface CacheResult {
  * can write to the bucket can influence workspace contents — which is why that
  * is stated plainly in docs/concepts/caching.md rather than implied away.
  *
- * The signed input binds the logic hash as well as the payload, so a validly
- * signed artifact for one task cannot be served under another task's key.
+ * The signed input covers three things: the logic hash, the payload, and the
+ * metadata. Binding the logic hash stops a validly signed artifact for one task
+ * being served under another task's key. Binding the metadata stops the exit code
+ * and duration being edited after signing — those are read back on a pull and
+ * reported as the task's result, so leaving them outside the signature would have
+ * made the header a place to write unauthenticated data.
  */
-function sha256Hex(data: Buffer): string {
-  return new Bun.CryptoHasher("sha256").update(data).digest("hex");
+function sha256Hex(data: Buffer | string): string {
+  const buf = typeof data === "string" ? Buffer.from(data, "utf-8") : data;
+  return new Bun.CryptoHasher("sha256").update(buf).digest("hex");
 }
 
-function signedInput(logicHash: string, payload: Buffer): string {
-  return `${logicHash}:${sha256Hex(payload)}`;
+/**
+ * Deterministic serialization of the metadata, excluding the signature itself
+ * (which cannot cover its own value). Keys are sorted so writer and reader agree
+ * regardless of JSON property order.
+ */
+function stableMetadataJson(metadata: Record<string, unknown>): string {
+  const { signature: _signature, ...rest } = metadata;
+  return JSON.stringify(rest, Object.keys(rest).sort());
+}
+
+function signedInput(logicHash: string, payload: Buffer, metadata: Record<string, unknown>): string {
+  return `${logicHash}:${sha256Hex(payload)}:${sha256Hex(stableMetadataJson(metadata))}`;
 }
 
 // ─── Metadata Embedding ────────────────────────────────────────────────────
@@ -147,7 +162,11 @@ export class RemoteVault {
       // so the task re-executes instead of restoring attacker-controlled files.
       const headerLen = payload.readUInt32LE(0);
       const archiveBytes = payload.subarray(4 + headerLen);
-      if (!this.crypto.verify(signedInput(logicHash, archiveBytes), metadata.signature ?? undefined)) {
+      const signatureValid = this.crypto.verify(
+        signedInput(logicHash, archiveBytes, metadata as unknown as Record<string, unknown>),
+        metadata.signature ?? undefined,
+      );
+      if (!signatureValid) {
         this.rejected++;
         process.stderr.write(
           `\x1b[2m[L2] rejected artifact for ${logicHash.slice(0, 12)}…: ` +
@@ -194,11 +213,12 @@ export class RemoteVault {
 
       const rawData = Buffer.from(await Bun.file(l1Path).arrayBuffer());
 
-      // Sign the payload when a secret is configured; otherwise record null and
-      // pulls run in trust mode.
-      const signature = this.crypto.sign(signedInput(logicHash, rawData));
+      // Sign the payload and the metadata together when a secret is configured;
+      // otherwise record null and pulls run in trust mode.
+      const metaBase = { ...metadata, logicHash };
+      const signature = this.crypto.sign(signedInput(logicHash, rawData, metaBase));
 
-      const archiveWithMeta = embedMetadata(rawData, { ...metadata, signature });
+      const archiveWithMeta = embedMetadata(rawData, { ...metaBase, signature });
 
       // Write to temp, upload, clean up
       const tmpPath = join(projectRoot, ".b4mal", `l2-push-${logicHash}.tmp`);

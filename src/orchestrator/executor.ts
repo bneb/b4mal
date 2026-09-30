@@ -50,6 +50,8 @@ export interface ExecutorConfig {
 // ─── Executor ────────────────────────────────────────────────────────────────
 
 export class DynamicExecutor {
+    /** Tasks already warned about, so a recurring note is printed once. */
+    private static warnedAboutWhenIf = new Set<string>();
     /**
      * Execute tasks dynamically as their dependencies are met (Continuous Flow).
      */
@@ -245,6 +247,19 @@ export class DynamicExecutor {
         // should never have existed on that machine.
         if (task.when) {
           const w = task.when;
+          if (w.if) {
+            // `when.if` is documented as reserved and is not evaluated. Saying so
+            // beats ignoring it: a task guarded by a condition that does nothing
+            // runs when the author expected it not to. Warned once per task so a
+            // build does not repeat itself.
+            if (!DynamicExecutor.warnedAboutWhenIf.has(task.id)) {
+              DynamicExecutor.warnedAboutWhenIf.add(task.id);
+              process.stderr.write(
+                `\x1b[2m[when] '${task.id}' sets when.if, which is not implemented — ` +
+                `the condition is ignored and the task will run.\x1b[0m\n`,
+              );
+            }
+          }
           if (w.platform && !w.platform.includes(process.platform)) {
             return {
               taskId: task.id, exitCode: 0,

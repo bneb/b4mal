@@ -206,6 +206,46 @@ describe("signed remote cache — tampered artifact", () => {
         expect(readFileSync(join(projectDir, "out/a.txt"), "utf-8")).toBe("signed-payload\n");
     });
 
+    test("rejects an artifact whose metadata was edited after signing", async () => {
+        // The payload and metadata are signed together. Without that, the header
+        // would be a place to write unauthenticated data: exitCode and durationMs
+        // are read back on a pull and reported as the task's result, so an editor
+        // with bucket access could change them while leaving the payload — and a
+        // payload-only signature — untouched.
+        await buildTask("gen", { B4MAL_CACHE_SECRET: SECRET });
+        const key = onlyKey();
+
+        const stored = stub.objects.get(key)!;
+        const view = new DataView(stored.buffer, stored.byteOffset);
+        const headerLen = view.getUint32(0, true);
+        const metadata = JSON.parse(new TextDecoder().decode(stored.subarray(4, 4 + headerLen)));
+        expect(metadata.exitCode).toBe(0);
+
+        // Re-encode the header with a different exit code, payload unchanged.
+        metadata.exitCode = 42;
+        const newHeader = new TextEncoder().encode(JSON.stringify(metadata));
+        const lengthPrefix = new Uint8Array(4);
+        new DataView(lengthPrefix.buffer).setUint32(0, newHeader.length, true);
+        const payloadBytes = stored.subarray(4 + headerLen);
+
+        const tampered = new Uint8Array(4 + newHeader.length + payloadBytes.length);
+        tampered.set(lengthPrefix, 0);
+        tampered.set(newHeader, 4);
+        tampered.set(payloadBytes, 4 + newHeader.length);
+        stub.objects.set(key, tampered);
+
+        wipeL1();
+        rmSync(join(projectDir, "out"), { recursive: true, force: true });
+
+        const result = await build({ B4MAL_CACHE_SECRET: SECRET });
+
+        expect(result.exitCode).toBe(0);
+        expect(result.output).toMatch(/rejected artifact/);
+        // Not 42: the tampered metadata never reached the build.
+        expect(result.output).not.toMatch(/exit 42/);
+        expect(readFileSync(join(projectDir, "out/a.txt"), "utf-8")).toBe("signed-payload\n");
+    });
+
     test("rejects an artifact when the secret does not match", async () => {
         await buildTask("gen", { B4MAL_CACHE_SECRET: SECRET });
         wipeL1();
