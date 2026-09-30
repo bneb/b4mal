@@ -155,6 +155,11 @@ function renderCollision(
     out(`  from running in the first place.\n\n`);
     out(`  ${c.dim}Standard CI:   run → flake → detect → quarantine → retry → repeat${c.reset}\n`);
     out(`  ${c.bold}b4mal:      prove → halt → fix → run${c.reset}\n\n`);
+    // The command exits 1 deliberately: the scenario it demonstrates is one a
+    // real build would refuse. Saying so keeps `b4mal demo && …` from looking
+    // like a failure when it did exactly what it promised.
+    out(`  ${c.dim}Exit code 1 — the collision above is fatal, so this mirrors what a${c.reset}\n`);
+    out(`  ${c.dim}real build would do. See docs/reference/cli.md for the rationale.${c.reset}\n\n`);
 }
 
 

@@ -184,6 +184,7 @@ async function main() {
                     await CICommand.execute(Bun.argv);
                 } else {
                     fail("Unknown setup command. Try: b4mal setup ci");
+                    process.exit(1);
                 }
                 break;
             }
@@ -454,32 +455,73 @@ async function main() {
 
             // ── plugin ────────────────────────────────────────────────────────
             case "plugin": {
-                const sub = positionals[1];
+                // Args are indexed from Bun.argv, so [0] is the runtime, [1] the
+                // script, [2] the command and [3] the first argument. This block
+                // used [1]/[2] — the script path and the command — so every
+                // subcommand fell through to "Unknown plugin command" and
+                // `b4mal plugin install` could never work.
+                const sub = positionals[3];
                 const { WasmRegistry } = await import("../plugin/wasm_registry");
                 const path = await import("path");
                 const registry = new WasmRegistry();
-                
+
                 if (sub === "install") {
-                    const url = positionals[2];
-                    const name = positionals[3] || path.basename(url, ".wasm");
+                    const url = positionals[4];
                     if (!url) {
                         fail("Usage: b4mal plugin install <url> [name]");
+                        info("Example: b4mal plugin install https://example.com/my-plugin.wasm");
                         process.exit(1);
                     }
+
+                    // Validated here so an unusable URL reads as a user error.
+                    // Left to the fetch it surfaced as the runtime's own
+                    // "fetch() URL is invalid", which says nothing about what to
+                    // do and looked like a crash.
+                    let parsedUrl: URL;
+                    try {
+                        parsedUrl = new URL(url);
+                    } catch {
+                        fail(`"${url}" is not a valid URL.`);
+                        info("Expected an absolute URL, e.g. https://example.com/my-plugin.wasm");
+                        process.exit(1);
+                    }
+
+                    // Derived after the guard: with no URL this used to call
+                    // path.basename(undefined) and throw before the check ran.
+                    //
+                    // The fallback matters: a URL like `mock://demo` parses with
+                    // an empty pathname, so basename alone yielded "" and
+                    // installed a file literally named ".wasm". An explicit name
+                    // is always accepted as the second argument.
+                    const derived = path.basename(parsedUrl.pathname, ".wasm");
+                    const name = positionals[5] || derived || parsedUrl.hostname || "plugin";
                     banner(`Installing Plugin: ${name}`);
-                    const outPath = await registry.install(url, name);
-                    ok(`Plugin successfully installed to ${outPath}`);
+                    // Download, magic-number and name failures are all expected
+                    // outcomes of pointing at a URL, not internal faults.
+                    try {
+                        const outPath = await registry.install(url, name);
+                        ok(`Plugin successfully installed to ${outPath}`);
+                    } catch (err: any) {
+                        fail(err?.message ?? String(err));
+                        process.exit(1);
+                    }
                 } else if (sub === "run") {
-                    const name = positionals[2];
+                    const name = positionals[4];
                     if (!name) {
                         fail("Usage: b4mal plugin run <name>");
                         process.exit(1);
                     }
                     banner(`Running Plugin: ${name}`);
-                    const code = await registry.run(name);
-                    ok(`Plugin exited with code ${code}`);
+                    try {
+                        const code = await registry.run(name);
+                        ok(`Plugin exited with code ${code}`);
+                    } catch (err: any) {
+                        fail(err?.message ?? String(err));
+                        process.exit(1);
+                    }
                 } else {
                     fail("Unknown plugin command. Try: install, run");
+                    process.exit(1);
                 }
                 break;
             }

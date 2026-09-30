@@ -119,8 +119,13 @@ Currently supports `--target github` (GitHub Actions).
 Transpile a legacy Mint/RWX YAML pipeline to B4mal format.
 
 ```bash
-b4mal migrate < input.yaml > output.ts
+b4mal migrate ./mint.yml
 ```
+
+Takes a **path**, not stdin, and writes `<pipeline-name>.ts` into the current
+directory (falling back to `pipeline.ts` when the pipeline is unnamed). This page
+previously showed `b4mal migrate < input.yaml > output.ts`, which the command has
+never supported — it reads no stdin and prints the result to no stdout.
 
 ## `b4mal attest`
 

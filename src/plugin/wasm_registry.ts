@@ -14,7 +14,9 @@ export class WasmRegistry {
 
     public async install(url: string, name: string): Promise<string> {
         // Red Team Mitigation: prevent directory traversal
-        if (name.includes("/") || name.includes("\\") || name.includes("..")) {
+        // Rejects traversal and an empty name. Without the emptiness check an
+        // empty name produced a file called ".wasm" in the registry directory.
+        if (!name || name.includes("/") || name.includes("\\") || name.includes("..")) {
             throw new Error("Invalid plugin name");
         }
 
@@ -47,7 +49,9 @@ export class WasmRegistry {
     }
 
     public async run(name: string): Promise<number> {
-        if (name.includes("/") || name.includes("\\") || name.includes("..")) {
+        // Rejects traversal and an empty name. Without the emptiness check an
+        // empty name produced a file called ".wasm" in the registry directory.
+        if (!name || name.includes("/") || name.includes("\\") || name.includes("..")) {
             throw new Error("Invalid plugin name");
         }
 
