@@ -60,28 +60,38 @@ correct but nobody has checked, and the docs assert a result anyway.
 
 ## C. Decisions needed
 
-12. **Licensing direction.** `minting-station/` is a working Cloudflare Worker that
+12. **`init` should write a config, not only a lock.** `init` generates
+    `b4mal.lock` and no `b4mal.config.json`, so the stated contract — the lock is a
+    generated artifact, the config is the source of truth — does not hold on a fresh
+    project, and `build --sync` has nothing to compile from. The error guidance was
+    corrected to stop sending users in circles, but the underlying inconsistency
+    remains. Writing a config from init's discovered tasks would fix it, at the cost of
+    a lossless config→lock round trip: `secrets`, `needsEnv` and `when` have each
+    already shipped broken by being dropped in exactly that kind of conversion. Do this
+    as its own change, with a round-trip equality test, and re-run the 35-repo
+    benchmark — not folded into a fix.
+13. **Licensing direction.** `minting-station/` is a working Cloudflare Worker that
     mints license keys, and `artifacts/plans/windows-plugin-rust-license.md` plans a
     licensing portal — but the CLI has no license enforcement at all and the project is
     MIT. `install.sh` used to demand a key from a domain that does not resolve; that
     gate is gone. Either implement enforcement (and reconcile it with MIT) or retire
     the portal.
-13. **Unused modules, kept deliberately.** `src/guard/sandbox.ts` and
+14. **Unused modules, kept deliberately.** `src/guard/sandbox.ts` and
     `src/trace/mock_tracer.ts` are referenced by nothing. They are small and represent
     real intent (execution sandboxing; a test double the trace subsystem's own comment
     tells tests to use), so they were left rather than deleted. Delete or wire them.
-14. **`artifacts/truth.json`** describes version 0.5.0 from March 2026 — 238 tests
+15. **`artifacts/truth.json`** describes version 0.5.0 from March 2026 — 238 tests
     across 23 files, and capabilities including `rust-vcm-syncing` and
     `git-history-audit` that no code provides. Nothing reads it. Delete it, or move it
     under a clearly historical path.
 
 ## D. Hygiene
 
-15. **`scripts/add_headers.ts`** is run by nothing — it is not in `package.json` — and
+16. **`scripts/add_headers.ts`** is run by nothing — it is not in `package.json` — and
     **10 of its 33 entries point at files that do not exist** (removed with the v0.5.0
     lineage). It now reports those and exits non-zero instead of skipping them
     silently; the table itself still needs pruning or the files restoring.
-16. **`docs/case-studies/turborepo-migration.md`** was the acceptance criterion of a
+17. **`docs/case-studies/turborepo-migration.md`** was the acceptance criterion of a
     sprint item that was marked complete. It does not exist.
 
 ## How this file stays honest
