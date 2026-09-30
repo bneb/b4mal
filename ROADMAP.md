@@ -58,28 +58,37 @@ correct but nobody has checked, and the docs assert a result anyway.
 
 ## B. Functional gaps
 
-6. **Remote artifacts are only authenticated when `B4MAL_CACHE_SECRET` is set.** Set
+6. **The comment stripper is superlinear in input size.** Measured: 10x the source
+   costs ~28x the time (≈O(n^1.5)), consistent across min/median/max samples. A
+   `tests/bench_logic.test.ts` case previously asserted linear O(n) behaviour and a
+   ≤15x ratio — a characteristic the code never had; it only passed when machine
+   load happened to flatten the large-input window, and under load it failed. The
+   test now asserts the bound the code actually meets (quadratic would still be
+   caught), and the underlying complexity is unfixed. It shows up in cache-key
+   computation for large source files; worth a proper pass over the tokenizer if
+   profiling ever points at it.
+7. **Remote artifacts are only authenticated when `B4MAL_CACHE_SECRET` is set.** Set
    it and entries are signed and verified; leave it unset and the remote cache is
    unauthenticated, which is documented in `docs/concepts/caching.md` and is the
    default. Deciding whether signing should be mandatory — or whether an unsigned
    entry should be rejected when a secret *is* configured but the entry predates it —
    is open.
-7. **`providesEnv` has no injection.** It participates in conflict detection but no
+8. **`providesEnv` has no injection.** It participates in conflict detection but no
    value is propagated between tasks, because a subprocess cannot set its parent's
    environment. `docs/concepts/security-model.md` says so. Either accept the field as
    conflict-detection only, or remove it.
-8. **Failure sandboxing does not exist.** `.b4mal/shadow/<taskId>` is described in
+9. **Failure sandboxing does not exist.** `.b4mal/shadow/<taskId>` is described in
    `artifacts/design/` and older docs; a failing task leaves its partial writes in
    place and only its dependents are skipped. `src/guard/sandbox.ts` is an unused
    helper for a *different* capability (OS-level execution sandboxing) and
    `B4MAL_STRICT_SANDBOX` was removed from the docs because nothing read it.
-9. **`crates/b4mal::discover_workspace_members`** only understands a single-line
+10. **`crates/b4mal::discover_workspace_members`** only understands a single-line
    `members = [...]` array. Multi-line arrays are silently ignored. Noted in the
    function's own doc comment.
-10. **`NxMigrator` emits `npx nx run <target>`.** Nx documents `nx run <target>`, but
+11. **`NxMigrator` emits `npx nx run <target>`.** Nx documents `nx run <target>`, but
     whether a bare target resolves at a workspace root is unverified — if it does not,
     it should be `run-many -t <target>`.
-11. **The L1 vault is keyed by absolute project path** (`~/.b4mal/artifacts/<sha256(projectRoot)>`),
+12. **The L1 vault is keyed by absolute project path** (`~/.b4mal/artifacts/<sha256(projectRoot)>`),
     so moving or re-cloning a checkout on a developer machine reuses nothing locally —
     every relocated project starts cold. L2 is unaffected (it keys on the logic hash),
     and CI is barely affected because a job's local disk is discarded anyway.
