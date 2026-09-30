@@ -85,8 +85,26 @@ jobs:
             echo "already=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Publish to npm
+      # Publishing to npm needs a token. If the secret is not configured, warn and
+      # skip rather than failing the job: the GitHub Release is produced by a
+      # separate job that depends only on `binaries`, so a missing token would
+      # otherwise red the whole workflow while the release still succeeded.
+      # The warning is loud on purpose — a release without its npm package is
+      # easy to miss.
+      - name: Check for an npm token
+        id: token
         if: steps.published.outputs.already != 'true'
+        run: |
+          if [ -z "${{ secrets.NPM_TOKEN }}" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::NPM_TOKEN is not configured — skipping npm publish. Run 'npm publish' from an authenticated machine to finish the release."
+            echo "npm publish skipped: NPM_TOKEN not configured." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to npm
+        if: steps.published.outputs.already != 'true' && steps.token.outputs.present == 'true'
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

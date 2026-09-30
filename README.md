@@ -60,7 +60,7 @@ dependencies without running anything. As a GitHub Action it is a few lines and 
 no-op on repositories that do not use b4mal:
 
 ```yaml
-- uses: bneb/b4mal@v0.1.1
+- uses: bneb/b4mal@v0.1.2
   with:
     fail-on-findings: false   # start by reporting, not gating
 ```

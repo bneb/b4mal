@@ -1,6 +1,6 @@
 {
   "name": "@bneb/b4mal",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Verified monorepo build orchestrator — formal resource-conflict detection, deterministic caching, and DAG execution",
   "type": "module",
   "license": "MIT",
