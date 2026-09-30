@@ -321,9 +321,21 @@ async function phase6_orchestrator(): Promise<void> {
 
     const NUM_TASKS = 100_000;
     const tasks: OrchestratorTask[] = [];
-    
-    // Create 10 parallel chains of 10,000 sequential tasks
-    const CHAINS = 10;
+
+    // 100 packages, each a chain of 1,000 sequential tasks, and each package
+    // owning its own input and output.
+    //
+    // The previous shape gave every task in a chain the SAME output claim
+    // (`fs:src/<c>/`), so all 10,000 tasks in a chain had to be serialised against
+    // each other — C(10,000, 2) ≈ 50 million dependency edges per chain. That is a
+    // graph no scheduler can plan quickly, because the isolation guarantee demands
+    // a total order over mutually-conflicting tasks. It measured the guarantee,
+    // not the planner, and the "~146 ms" it was credited with was never a
+    // measurement of anything real.
+    //
+    // Distinct per-package outputs is what a monorepo actually looks like, and it
+    // still exercises the depth-grouping and edge-injection paths.
+    const CHAINS = 100;
     const TASKS_PER_CHAIN = NUM_TASKS / CHAINS;
 
     for (let c = 0; c < CHAINS; c++) {
@@ -333,7 +345,9 @@ async function phase6_orchestrator(): Promise<void> {
             tasks.push({
                 id,
                 cmd: ["true"],
-                claims: [`fs:src/${c}/`],
+                reads: [`pkg${c}/task${t}/src`],
+                writes: [`pkg${c}/task${t}/dist`],
+                claims: [],
                 deps,
             });
         }
@@ -343,9 +357,13 @@ async function phase6_orchestrator(): Promise<void> {
     const dag = WavePlanner.planDAG(tasks);
     const ms = performance.now() - t0;
 
+    let injected = 0;
+    for (const [, dependents] of dag.dependents) injected += dependents.length;
+
     console.log(`  Parsed and sorted DAG of ${NUM_TASKS.toLocaleString()} tasks in ${ms.toFixed(2)} ms`);
     bar("Resolution time", ms.toFixed(2), "ms");
     bar("Resolution throughput", ops(NUM_TASKS, ms), "tasks/s");
+    bar("Injected dependency edges", injected.toLocaleString(), "edges");
     
     // Sanity check
     if (dag.tasks.size !== NUM_TASKS) throw new Error("DAG task count mismatch");

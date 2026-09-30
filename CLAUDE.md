@@ -15,7 +15,7 @@ bunx tsc --noEmit                 # Type-check without emitting (required by CI)
 bun run build                     # Compile CLI to dist/index.js (bun build --target bun)
 bun run src/cli/index.ts build    # Self-hosted build (reads b4mal.lock)
 bun run src/cli/index.ts demo     # Run the interactive collision-detection demo
-bun run src/cli/index.ts init     # Auto-discover project structure, write b4mal.lock
+bun run src/cli/index.ts init     # Auto-discover → b4mal.config.json, then generate b4mal.lock
 bun run src/cli/index.ts attest t fs:write:dist   # Normalized resource claim (JSON)
 
 # Docs
@@ -26,6 +26,7 @@ bun run docs:preview              # Preview built docs site
 # Publishing
 bun publish                       # Publish to npm (runs build + test first)
 bun run scripts/benchmark-init.ts # Test init against 35 real repos (scores GREEN/YELLOW/RED)
+bun src/benchmarks/crucible.ts   # Performance suite; BENCHMARKS.md is written from its output
 cargo test --manifest-path crates/b4mal/Cargo.toml   # Rust integration crate
 
 # Roadmap
@@ -41,7 +42,7 @@ The project uses **Bun** as both runtime and package manager. `bun build` compil
 ```
 b4mal.config.json  ──[config_loader]──>  B4malConfig  ──[configToTasks]──>  TaskConfigWithId[]
                                                                                     │
-                                                                         writeLockfileAtomic()
+                                                                         writeLockfileAtomic()   <- `init` writes BOTH files this way
                                                                                     │
                                                                                     ▼
 b4mal.lock  ──[engine.normalizeLockTasks]──>  TaskConfigWithId[]  ──[conversion]──>  OrchestratorTask[]
