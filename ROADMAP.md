@@ -12,20 +12,45 @@ before starting and after finishing.
 These are the highest priority, because each is a case where the code may well be
 correct but nobody has checked, and the docs assert a result anyway.
 
-1. **L2 against real object storage.** The remote cache is verified end to end
-   against an in-memory stub (`tests/fixtures/s3_stub.ts`, `tests/remote_cache_l2.test.ts`,
-   `tests/remote_cache_signing.test.ts`). What that cannot exercise: AWS SigV4 request
-   signing, real bucket policies, multipart uploads for large artifacts, and eventual
-   consistency. *Needs credentials.*
+1. ~~**L2 against real object storage.**~~ **Done 2026-09-30, against Cloudflare R2.**
+   Verified end to end over the network, not against a stub: a signed artifact was
+   pushed to R2, the entire L1 layer (ledger, vault and declared outputs) was
+   deleted, and a rebuild restored the output from R2 **without re-executing the
+   task** — proven by an execution counter that stayed at 1. Then, in the same
+   session: a pull signed with a *different* secret was rejected and the task
+   re-ran; an object corrupted in the bucket (same size, flipped bytes) was
+   rejected and the task re-ran. All test objects were deleted afterwards and the
+   empty prefix confirmed **by key listing**.
+
+   Procedure: `scripts/verify-l2.sh` (env-driven; any S3-compatible endpoint).
+
+   Still unexercised: AWS SigV4 against real AWS proper (R2 is S3-compatible but
+   its own implementation), multipart uploads for artifacts large enough to need
+   them, and eventual-consistency timing.
 2. **`b4mal trace`.** Linux-only by design and covered by no CI job, so its DAG
    synthesis has never run in this repository's pipeline. `tests/trace.test.ts` tests
    the synthesizer on recorded events, not the tracer itself.
-3. **Windows.** No CI job, no Windows release binary (the publish matrix builds four
-   targets, none of them Windows), and the artifact vault shells out to `tar` and
-   `zstd`, which are not present by default there. The installation docs mark it
-   untested.
-4. **`BENCHMARKS.md`.** The hardware numbers in it have not been reproduced here, and
-   the file names `src/benchmarks/crucible.ts` as the suite that produced them.
+3. **Windows.** Partly addressed: a Windows binary is now in the publish matrix
+   (cross-compiled from ubuntu, PE magic-number checked before upload) and ships
+   with the next release. Still open: L1 caching does not work there, because the
+   artifact vault shells out to `zstd` and Windows does not ship it — every run
+   re-executes rather than restoring. A `windows-latest` CI job smoke-tests the
+   rest, but the test suite cannot run there (`sh -c` throughout).
+4. ~~**`BENCHMARKS.md`.**~~ **Done 2026-09-30.** Re-measured on the machine the file
+   described (Apple M4, 10 cores, 24 GB — it matches) and every figure was wrong:
+   write 938→266 MB/s, SHA-256 cold 1813→657, PrefixTree 86,116→17,950 proofs/s,
+   zstd pack 126→66. One was *faster* than published (SQLite 7,931→10,783 tx/s),
+   which is what showed the table was not one coherent run. The file is now a
+   recorded run with environment, runtime, date and commit, and states plainly that
+   I/O phases vary 2–3× and that the planner number is shape-dependent.
+
+   The planner figure itself was the real find: the suite's 100,000-task benchmark
+   gave every task in a chain the same output claim, forcing ~500 million
+   serialisation edges — unplannable by any scheduler, so the "~146 ms" measured
+   nothing. Behind it was a genuine O(n²) in dependency injection (every task
+   compared against every accepted task). Fixed with a prefix-tree index and pinned
+   differentially: 20,000 tasks went 6,024 ms → 448 ms, with a transcribed copy of
+   the original scan asserting an identical edge set across 12 cases.
 5. **VS Code extension.** `vscode-extension/` is a three-file scaffold that no CI job
    builds or tests.
 
