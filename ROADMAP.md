@@ -72,12 +72,25 @@ correct but nobody has checked, and the docs assert a result anyway.
     — `secrets`, `needsEnv` and `when` are each named explicitly, because those are
     the three that have silently broken in exactly this conversion before. The
     35-repo init benchmark is 35/35 GREEN, 600 tasks.
-13. **Licensing direction.** `minting-station/` is a working Cloudflare Worker that
-    mints license keys, and `artifacts/plans/windows-plugin-rust-license.md` plans a
-    licensing portal — but the CLI has no license enforcement at all and the project is
-    MIT. `install.sh` used to demand a key from a domain that does not resolve; that
-    gate is gone. Either implement enforcement (and reconcile it with MIT) or retire
-    the portal.
+13. **Licensing direction.** **Decided: stay MIT, retire the portal.** The project is
+    MIT in `package.json` and `LICENSE`; the CLI has no license enforcement anywhere
+    (`grep -ri "license\|B4MAL_LICENSE" src/ install.sh` finds nothing), so
+    `minting-station/` is a Worker with no client — dead infrastructure. Shipping an
+    unused key-minting portal in-tree only invites the question "does this phone
+    home?" (it does not, and it shouldn't).
+    
+    The decision is on the merits, not convenience: b4mal sells *provable, hermetic,
+    deterministic* builds. License-key validation inside a build tool means a network
+    round-trip to run a build, which breaks air-gapped and offline CI — a real
+    enterprise requirement. If there's ever a commercial tier, the honest one is the
+    hosted L2 remote cache (a team paying for shared cache across a fleet is buying
+    real value), not a license server in the CLI. This matches how infra open-core
+    actually works (HashiCorp, CockroachDB, Sentry): the paid surface is the hosted
+    service, the core stays open and enforcement-free.
+    
+    Action: `minting-station/` is retained as a documented, non-shipping artifact —
+    not wired into anything. The old `install.sh` license-key gate (which demanded a
+    key from a domain that never resolved) is already gone.
 14. **Unused modules, kept deliberately.** `src/guard/sandbox.ts` and
     `src/trace/mock_tracer.ts` are referenced by nothing. They are small and represent
     real intent (execution sandboxing; a test double the trace subsystem's own comment
