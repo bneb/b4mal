@@ -14,8 +14,38 @@
 set -e
 
 # ── Configuration ─────────────────────────────────
-VERSION="${B4MAL_VERSION:-v0.1.1}"
 REPO="https://github.com/bneb/b4mal"
+# Last resort when GitHub cannot be reached. Never the only source: this used to
+# be a hard-coded pin, so the installer kept serving v0.1.1 — the build whose
+# --help crashed — long after newer releases existed. An installer that silently
+# serves a stale version is worse than one that fails, because it installs the
+# wrong thing confidently.
+FALLBACK_VERSION="v0.1.2"
+
+detect_latest_version() {
+    # Resolve the newest release so a fresh install is never a stale build.
+    # B4MAL_VERSION still pins explicitly, which is what CI and reproducible
+    # installs should use.
+    # api.github.com, not github.com/.../releases/latest: the latter is the web
+    # URL and answers with a redirect, which silently yields an empty version.
+    curl -fsSL --max-time 15 \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/bneb/b4mal/releases/latest" 2>/dev/null |
+        sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\{0,1\}v\{0,1\}\([^"]*\)"\{0,1\}.*/\1/p' |
+        head -1
+}
+
+if [ -n "${B4MAL_VERSION:-}" ]; then
+    VERSION="v${B4MAL_VERSION#v}"
+else
+    _detected="$(detect_latest_version || true)"
+    if [ -n "${_detected}" ]; then
+        VERSION="v${_detected#v}"
+    else
+        VERSION="$FALLBACK_VERSION"
+    fi
+fi
+
 BASE_URL="${B4MAL_BASE_URL:-${REPO}/releases/download/${VERSION}}"
 CONFIG_DIR="${HOME}/.b4mal"
 INSTALL_DIR="${HOME}/.local/bin"
