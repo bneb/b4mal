@@ -162,7 +162,7 @@ describe("ArtifactVault.unpack — extraction safety", () => {
             { name: "../escaped.txt", type: "file", content: "pwned\n" },
         ]));
 
-        await expect(ArtifactVault.unpack(hash, projectRoot)).rejects.toThrow(/unsafe path|rejected/i);
+        await expect(ArtifactVault.unpack(hash, projectRoot)).rejects.toThrow(/unsafe path|rejected|absolute path|traversal/i);
         expect(existsSync(join(base, "escaped.txt"))).toBe(false);
         ArtifactVault.remove(hash, projectRoot);
     });
@@ -173,7 +173,7 @@ describe("ArtifactVault.unpack — extraction safety", () => {
             { name: `${outside}/absolute.txt`, type: "file", content: "pwned\n" },
         ]));
 
-        await expect(ArtifactVault.unpack(hash, projectRoot)).rejects.toThrow(/unsafe path|rejected/i);
+        await expect(ArtifactVault.unpack(hash, projectRoot)).rejects.toThrow(/unsafe path|rejected|absolute path|traversal/i);
         expect(existsSync(join(outside, "absolute.txt"))).toBe(false);
         ArtifactVault.remove(hash, projectRoot);
     });

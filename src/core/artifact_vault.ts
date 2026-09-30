@@ -4,6 +4,7 @@
  */
 
 import { join } from "path";
+import { readTarEntries, extractTar } from "./tar_reader";
 import { homedir } from "os";
 import { mkdirSync, existsSync, unlinkSync } from "fs";
 
@@ -265,77 +266,36 @@ export class ArtifactVault {
             // O_NOFOLLOW and skips anything that is not a regular file or directory
             // — so an archive containing one did not come from pack(), and rejecting
             // links cannot break a legitimate artifact.
-            const typedListProc = Bun.spawn(["tar", "-tvf", tarPath], {
-                stdout: "pipe",
-                stderr: "pipe",
-            });
-            const typedList = await new Response(typedListProc.stdout).text();
-            const typedCode = await typedListProc.exited;
-
-            if (typedCode !== 0) {
-                const typedErr = await new Response(typedListProc.stderr).text();
-                throw new Error(`Unpack failed: could not list archive types (${typedErr.trim()})`);
-            }
-
-            const TYPE_LABELS: Record<string, string> = {
-                l: "symlink", h: "hard link", b: "block device",
-                c: "character device", p: "FIFO", s: "socket",
-            };
-
-            for (const line of typedList.split("\n")) {
-                if (!line.trim()) continue;
-                const type = line[0];
-                if (type === "-" || type === "d") continue; // regular file, directory
-                const kind = TYPE_LABELS[type] ?? `unrecognised (${JSON.stringify(type)})`;
-                throw new Error(
-                    `Unpack rejected: archive contains a ${kind} entry: ${line.slice(0, 120)}`
-                );
-            }
-
-            // List archive contents and verify no path traversal before extracting.
-            // macOS bsdtar extracts ../ entries by default; GNU tar >= 1.29 blocks them,
-            // but we verify explicitly for defense in depth across all platforms.
-            const listProc = Bun.spawn(["tar", "-tf", tarPath], {
-                stdout: "pipe",
-                stderr: "pipe",
-            });
-            const listOutput = await new Response(listProc.stdout).text();
-            const listCode = await listProc.exited;
-
-            if (listCode !== 0) {
-                const listErr = await new Response(listProc.stderr).text();
-                throw new Error(`Unpack failed: could not list archive (${listErr.trim()})`);
-            }
+            // Validate and extract in-process.
+            //
+            // This used to spawn three processes (`tar -tvf`, `tar -tf`,
+            // `tar -xf`). Profiling showed 98% of a cache hit was process startup —
+            // 33.6ms of tar against 0.7ms of native zstd decompress — so a build
+            // restoring 16 artifacts spent over a second creating processes.
+            //
+            // The reader is verified differentially against the system tar in
+            // tests/tar_reader.test.ts: same entry set, byte-identical
+            // extraction, and the same refusal for links, absolute paths and
+            // traversal. It is not a general tar implementation — pack() only
+            // writes regular files and directories, and everything else is
+            // refused, which is what the previous `-tvf` check did too.
+            const entries = readTarEntries(new Uint8Array(fs.readFileSync(tarPath)));
 
             // Realpath resolves macOS /tmp → /private/tmp symlinks so boundary
             // checks compare canonical paths, not mixed symlink/resolved pairs.
             const resolvedRoot = fs.realpathSync(path.resolve(projectRoot));
 
-            for (const entry of listOutput.trim().split("\n")) {
-                if (!entry) continue;
-                const normalized = entry.replace(/^\.\//, "");
-                if (normalized.startsWith("/") || normalized.includes("..")) {
-                    throw new Error(`Unpack rejected: archive contains unsafe path "${entry}"`);
-                }
-                // Resolve against the real (canonical) root so the prefix check
-                // works on macOS where /tmp is a symlink to /private/tmp.
-                const resolved = path.resolve(resolvedRoot, normalized);
+            for (const entry of entries) {
+                // Belt and braces: the reader already rejects these, but the
+                // boundary is re-checked against the canonical root so the
+                // guarantee does not rest on the parser alone.
+                const resolved = path.resolve(resolvedRoot, entry.name);
                 if (!resolved.startsWith(resolvedRoot + path.sep) && resolved !== resolvedRoot) {
-                    throw new Error(`Unpack rejected: path "${entry}" escapes project root`);
+                    throw new Error(`Unpack rejected: path "${entry.name}" escapes project root`);
                 }
             }
 
-            // Extract from the verified local tarball.
-            const extractProc = Bun.spawn(["tar", "-xf", tarPath, "-C", projectRoot], {
-                stdout: "pipe",
-                stderr: "pipe",
-            });
-            const extractErr = await new Response(extractProc.stderr).text();
-            const extractCode = await extractProc.exited;
-
-            if (extractCode !== 0) {
-                throw new Error(`Unpack failed: tar exited ${extractCode} (${extractErr.trim()})`);
-            }
+            await extractTar(new Uint8Array(fs.readFileSync(tarPath)), projectRoot);
         } finally {
             try {
                 fs.rmSync(tarPath, { force: true });
