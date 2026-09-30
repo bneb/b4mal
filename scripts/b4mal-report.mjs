@@ -52,7 +52,11 @@ function setOutput(name, value) {
 }
 
 if (!reportPath || !existsSync(reportPath)) {
+    // No report means there was nothing to audit (no b4mal project, or the check
+    // step was skipped). Treated as verified: a repository that does not use
+    // b4mal must not be red-lined.
     console.log("::notice::b4mal check produced no report (nothing to audit).");
+    setOutput("found", "false");
     setOutput("verified", "true");
     setOutput("findings", "0");
     setOutput("collisions", "0");
@@ -66,6 +70,7 @@ try {
     report = JSON.parse(readFileSync(reportPath, "utf-8"));
 } catch {
     console.log("::error::b4mal check output was not valid JSON — see the step log.");
+    setOutput("found", "true");
     setOutput("verified", "false");
     setOutput("findings", "1");
     setOutput("collisions", "0");
@@ -90,6 +95,7 @@ for (const f of findings) {
 if (report.note) console.log(`::notice::${report.note}`);
 if (title) console.log(`::notice::${title}`);
 
+setOutput("found", "true");
 setOutput("verified", String(report.verified ?? (total === 0)));
 setOutput("findings", String(total));
 setOutput("collisions", String(collisions));
