@@ -151,7 +151,16 @@ async function openConfig(text: string, name = "b4mal.config.json") {
 
 afterEach(async () => {
     try { proc?.kill(); } catch { /* already gone */ }
-    if (proc) await proc.exited;
+    // Awaiting exit unbounded can hang the whole suite: the CLI process is a
+    // wrapper and its stdio pipes can be held by a grandchild that outlives the
+    // kill. Bounded so cleanup can never stall a run.
+    if (proc) {
+        await Promise.race([
+            proc.exited,
+            new Promise((r) => setTimeout(r, 2000)),
+        ]);
+        try { proc?.kill(9); } catch { /* gone */ }
+    }
     if (dir) rmSync(dir, { recursive: true, force: true });
     dir = undefined;
     proc = undefined;
