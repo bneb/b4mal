@@ -27,8 +27,50 @@ jobs:
       - name: Test
         run: bun test
 
-      - name: Build (dogfood)
-        run: bun run src/cli/index.ts build
+      # ── Dogfood the cache ──────────────────────────────────────────────
+      # The build below is b4mal building b4mal. That is only meaningful if a
+      # warm cache is visible: a fresh runner always misses, so a single run
+      # proves nothing about caching. Persist the L1 cache across runs, then
+      # build twice — the second run is the one that must hit.
+      - name: Restore L1 cache
+        id: l1
+        uses: actions/cache@v4
+        with:
+          path: .b4mal
+          key: b4mal-l1-${{ runner.os }}-${{ hashFiles('b4mal.lock', 'src/**', 'package.json') }}
+          restore-keys: |
+            b4mal-l1-${{ runner.os }}-
+
+      - name: Build (cold or warm from cache)
+        run: |
+          bun run src/cli/index.ts build 2>&1 | tee build1.log
+
+      # Guaranteed to hit regardless of whether the restored cache was warm:
+      # the first build populates the ledger and vault, the second must reuse it.
+      - name: Build again (must hit cache)
+        run: |
+          bun run src/cli/index.ts build 2>&1 | tee build2.log
+
+      - name: Publish dogfood evidence
+        if: always()
+        shell: bash
+        run: |
+          summary() { grep -oE '[0-9]+ tasks?, [0-9]+ cache hits?' "$1" | tail -1 || echo "(no summary)"; }
+          {
+            echo "### 🐕 b4mal building b4mal"
+            echo ""
+            echo "| Run | Result |"
+            echo "|-----|--------|"
+            echo "| First build | \`$(summary build1.log)\` |"
+            echo "| Second build | \`$(summary build2.log)\` |"
+            echo ""
+            echo "Cache restored from a previous run: \`${{ steps.l1.outputs.cache-hit }}\`"
+            echo ""
+            echo "The second build restores its outputs from the SQLite ledger and the"
+            echo "tar.zst artifact vault instead of re-running them. Both runs execute the"
+            echo "same tasks — the difference is recompute versus restore."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "dogfood first=$(summary build1.log) second=$(summary build2.log)"
 
   init-test:
     name: Init test (20 repos)
