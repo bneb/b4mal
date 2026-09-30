@@ -91,21 +91,15 @@ if (existsSync(join(root, "out", "a.txt"))) {
 const again = await cli(["build"], root);
 check("second build exits 0", again.exitCode === 0, again.output.slice(-300));
 
-// The cache assertion depends on the platform. The artifact vault shells out to
-// `tar` and `zstd`; Windows runners ship the former (bsdtar) but not the latter,
-// so packing fails there and every run re-executes. Asserting merely that the
-// output mentions "cache hits" would pass on 0 hits and prove nothing — so the
-// count is checked where packing is possible, and reported either way.
+// The cache is asserted unconditionally on every platform, including Windows.
+// The vault used to shell out to `zstd`, which Windows does not ship, so packing
+// failed there and this check was skipped whenever zstd was absent — the exact
+// platform where a silently-missing cache was worst. Compression now happens
+// in-process, so a Windows runner must produce a real cache hit; if it doesn't,
+// this fails rather than skipping. Asserting merely that the output mentions
+// "cache hits" would pass on 0 hits and prove nothing, so the count is checked.
 const hits = Number(/(\d+) cache hits/.exec(again.output)?.[1] ?? "-1");
-const canPack = Boolean(Bun.which("tar")) && Boolean(Bun.which("zstd"));
-if (canPack) {
-    check("second build reports a cache hit", hits >= 1, `reported ${hits}`);
-} else {
-    console.log(
-        `  skip  cache assertion — tar=${Bun.which("tar") ?? "absent"}, ` +
-        `zstd=${Bun.which("zstd") ?? "absent"}; reported ${hits} hits`,
-    );
-}
+check("second build reports a cache hit", hits >= 1, `reported ${hits} (tar=${Bun.which("tar") ?? "absent"}, zstd=${Bun.which("zstd") ?? "absent"})`);
 
 // ── The audit ──────────────────────────────────────────────────────────────
 const audit = await cli(["check"], root);

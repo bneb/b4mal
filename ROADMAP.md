@@ -30,12 +30,14 @@ correct but nobody has checked, and the docs assert a result anyway.
 2. **`b4mal trace`.** Linux-only by design and covered by no CI job, so its DAG
    synthesis has never run in this repository's pipeline. `tests/trace.test.ts` tests
    the synthesizer on recorded events, not the tracer itself.
-3. **Windows.** Partly addressed: a Windows binary is now in the publish matrix
-   (cross-compiled from ubuntu, PE magic-number checked before upload) and ships
-   with the next release. Still open: L1 caching does not work there, because the
-   artifact vault shells out to `zstd` and Windows does not ship it — every run
-   re-executes rather than restoring. A `windows-latest` CI job smoke-tests the
-   rest, but the test suite cannot run there (`sh -c` throughout).
+3. **Windows.** A Windows binary is in the publish matrix (cross-compiled from
+   ubuntu, PE magic-number checked before upload) and ships with the next release.
+   **L1 caching now works there**: the vault compressed by shelling out to `zstd`,
+   which Windows does not ship, so packing failed and every run re-executed
+   silently. Compression is now in-process (Bun's native zstd) and the Windows
+   smoke job asserts a real cache hit instead of skipping the check when zstd is
+   absent. `tests/artifact_vault_nobin.test.ts` drives pack with `zstd` removed
+   from PATH. Still open: the test suite cannot run there (`sh -c` throughout).
 4. ~~**`BENCHMARKS.md`.**~~ **Done 2026-09-30.** Re-measured on the machine the file
    described (Apple M4, 10 cores, 24 GB — it matches) and every figure was wrong:
    write 938→266 MB/s, SHA-256 cold 1813→657, PrefixTree 86,116→17,950 proofs/s,

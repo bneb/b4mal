@@ -30,9 +30,13 @@ dependency, and `check`, using only `bun -e` for task commands. All of that pass
 Windows.
 
 What that does not cover: the test suite itself (it uses `sh -c` throughout, so it
-cannot run there), and L1 caching. The artifact vault shells out to `tar` and `zstd`;
-Windows ships the former but not the latter, so packing fails and each run re-executes
-rather than restoring from cache.
+cannot run there).
+
+L1 caching works on Windows. The artifact vault used to shell out to `zstd`, which
+Windows does not ship — packing failed there and every run silently re-executed
+instead of restoring from cache. Compression now happens in-process, so neither
+direction needs the `zstd` binary, and the Windows smoke job asserts a real cache
+hit rather than skipping the check.
 
 A Windows binary is now in the release matrix, so "one binary, no runtime install"
 holds there too — but it arrives with the release that follows the one you are
@@ -54,7 +58,7 @@ use `@bneb/b4mal`.
 | Feature | macOS | Linux | Windows |
 |---------|-------|-------|---------|
 | Build execution | ✅ tested | ✅ tested (CI) | ✅ smoke-tested (CI) |
-| Cache (L1) | ✅ | ✅ | ❌ needs `zstd` |
+| Cache (L1) | ✅ | ✅ | ✅ |
 | Remote cache (L2) | ⚠️ verified against a stub only | ⚠️ verified against a stub only | ⚠️ same |
 | Trace synthesis | ❌ (SIP) | ✅ (strace/eBPF) | ❌ |
 

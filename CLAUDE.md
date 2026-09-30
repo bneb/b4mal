@@ -125,9 +125,8 @@ The verification model is set-theoretic: (W₁ ∩ (R₂ ∪ W₂)) = ∅ ∧ (W
 
 - **Scheduling is fail-fast.** In `DynamicExecutor.run`, a task whose `exitCode !== 0` must not decrement its dependents' in-degrees. Dependents are marked `skipped: true` (with `exitCode: 1`) transitively instead. `settleIfComplete` resolves on `settled.size === totalTasks`, so skipped tasks still count toward completion. `tests/failfast.test.ts` covers this.
 
-- **`ArtifactVault.pack` writes to a scratch path and renames.** `zstd -o <existing>` refuses to overwrite when stdin is a pipe, so writing straight to the archive path made re-packing any hash impossible; the scratch+rename also prevents a truncated archive from being restored as corrupt output by a later hit.
-
-- **Never pipe `zstd --stdout` into `tar` in the same process tree.** `tar` stops reading at the end-of-archive marker, closing the pipe while zstd still writes; the resulting EPIPE surfaces as an *unhandled rejection* (the inner child's stream is never drained) and kills the CLI. `unpack` decompresses to a file first.
+- **The vault does not depend on the `zstd` binary.** It used to pipe `tar | zstd` for pack and spawn `zstd -d` for unpack. Windows ships `tar` but not `zstd`, so packing failed there and the L1 cache silently did nothing — every build re-executed. Both directions now use Bun's native `zstdCompressSync` / `zstdDecompressSync`, and `tar` is read and written by `src/core/tar_reader.ts` in-process. That also removed the old EPIPE hazard (piping `zstd --stdout` into `tar` closed the pipe mid-write and surfaced as an unhandled rejection that killed the CLI). `pack` still writes to a scratch path and renames, so a truncated archive is never left at the content-addressed path for a later hit to "restore".
+- **`tar_reader.ts` must stay portable across tar dialects.** bsdtar (macOS) writes `ustar\0` magic, GNU tar (Linux) writes `ustar `, and v7 writes none. It also must accept the NUL typeflag and decode entry names as UTF-8. All three were Linux-only breakages caught by CI, not by local runs.
 
 - **`B4MAL_DB_PATH` overrides the ledger path** (`SQLiteLedger` constructor). Used by `tests/dogfood.test.ts` and `tests/cli_integration.test.ts` for cache isolation. Without it those tests write to the project's real `.b4mal/cache.db`.
 

@@ -59,11 +59,12 @@ export class ArtifactVault {
     /**
      * Pack declared write paths into a zstd-compressed archive.
      *
-     * Uses a shell pipe: tar -cf - ... | zstd -T0 > archive.tar.zst
-     * This works on both macOS bsdtar and GNU tar, unlike -I 'zstd -T0'
-     * which requires a single executable (bsdtar limitation).
-     *
-     * -T0 tells zstd to use all available CPU cores.
+     * `tar -cf - ... | zstd` used to be a shell pipe. Compression now happens
+     * in-process via Bun's native zstd, and the tarball is produced by spawning
+     * `tar` (which every supported platform, including Windows, ships as
+     * bsdtar). Neither direction requires the `zstd` binary — previously the
+     * unpack half did not and the pack half did, so the L1 cache silently did
+     * nothing on Windows.
      */
     static async pack(
         logicHash: string,
@@ -171,20 +172,34 @@ export class ArtifactVault {
             //     would happily "restore" as corrupt output.
             const scratchPath = `${archivePath}.pack-${process.pid}-${Date.now()}.tmp`;
 
-            const zstdProc = Bun.spawn(["zstd", "-T0", "-f", "-o", scratchPath], {
-                stdin: tarProc.stdout,
-                stdout: "pipe",
-                stderr: "pipe",
-            });
-
-            const [tarExit, zstdExit] = await Promise.all([tarProc.exited, zstdProc.exited]);
-
-            if (tarExit !== 0 || zstdExit !== 0) {
+            // Compress in-process with Bun's native zstd rather than piping into
+            // the `zstd` CLI.
+            //
+            // Windows runners ship tar (bsdtar) but NOT zstd, so the previous
+            // `Bun.spawn(["zstd", ...])` failed there and the L1 cache silently
+            // did nothing on that platform — every build re-executed. unpack
+            // already uses the native decompressor; this brings pack in line, so
+            // neither direction depends on an external binary.
+            //
+            // The frame format is identical to the CLI's, so archives written
+            // before this change (and by any other tool) still read back.
+            const { zstdCompressSync } = require("bun") as typeof import("bun");
+            const tarExit = await tarProc.exited;
+            if (tarExit !== 0) {
                 const tarErr = await new Response(tarProc.stderr).text();
-                const zstdErr = await new Response(zstdProc.stderr).text();
                 try { fs.rmSync(scratchPath, { force: true }); } catch { /* best effort */ }
-                throw new Error(`Pack failed. tar: ${tarExit} (${tarErr.trim()}), zstd: ${zstdExit} (${zstdErr.trim()})`);
+                throw new Error(`Pack failed. tar exited ${tarExit} (${tarErr.trim()})`);
             }
+
+            const tarBytes = new Uint8Array(await new Response(tarProc.stdout).arrayBuffer());
+            let compressed: Uint8Array;
+            try {
+                compressed = zstdCompressSync(tarBytes);
+            } catch (e: any) {
+                try { fs.rmSync(scratchPath, { force: true }); } catch { /* best effort */ }
+                throw new Error(`Pack failed: could not compress the archive (${e?.message ?? e})`);
+            }
+            fs.writeFileSync(scratchPath, compressed);
 
             fs.renameSync(scratchPath, archivePath);
         } finally {
