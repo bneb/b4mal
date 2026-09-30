@@ -91,66 +91,75 @@ The `trace` command intercepts `execve`, `openat`, and `clone` system calls via 
 
 Measured against Turborepo and Nx on an identical fixture: 8 packages × (build +
 test) = 16 tasks, each doing non-elidable work (SHA-256 over 256KB) seeded per
-package. Reproduce with `scripts/bench-compare.sh`.
+package. Reproduce with `scripts/bench-compare.sh`, or run the **Compare** workflow,
+which executes it on a dedicated runner and publishes the numbers to the job
+summary.
+
+The figures below are from that workflow: **ubuntu-latest, 4 vCPU, Bun 1.3.14,
+Node 20**, median of 3 runs. A dedicated runner is not a detail — on a contended
+laptop the same fixed workload varied 6× between samples, which is larger than any
+difference between these tools, so local timings are noise.
 
 ### Correctness — where this differs categorically
 
 Two tasks declaring the **same output file**, each truncating it, pausing, then
 finishing. Run concurrently, the file tears; serialised, it stays whole.
 
-| Tool | Result |
-|---|---|
-| **b4mal** | **5 / 5 consistent** |
-| Turborepo | 2 consistent / **3 torn** of 5 |
-| Nx | not measured — the harness could not drive its writers |
+| Tool | Consistent | Torn |
+|---|---|---|
+| **b4mal** | **5 / 5** | **0** |
+| Turborepo | 2 / 5 | **3** |
+| Nx | 2 / 5 | **3** |
 
-Turborepo's race is real but *nondeterministic*: it tore the file in 3 of 5 runs and
-happened to get lucky in the other 2. That is the point — a race is a heisenbug, not
-a reliable failure. b4mal never tore, because declared outputs feed a prefix tree
-that injects a dependency so the tasks never overlap. This does not depend on task
-duration or graph size: it is the difference between a DAG that happened to be
-correct and a scheduler that guarantees it.
+Both competitors' races are real but *nondeterministic* — they tore in 3 of 5 runs
+and got lucky in the other 2. That is the point: a race is a heisenbug, not a
+reliable failure, which is exactly why it survives in production. b4mal never
+tore, because declared outputs feed a prefix tree that injects a dependency so the
+tasks never overlap. This does not depend on task duration or graph size — it is the
+difference between a DAG that happened to be correct and a scheduler that
+guarantees it.
 
-(Nx is listed as not measured because the harness's Nx wiring does not currently
-execute its writer tasks; we would rather say so than publish a zero.)
+### Performance — a tie on cold, a tie on warm
 
-### Performance — at parity, and ahead on warm cache
-
-Median of 3 runs, local cache only, no remote cache on any side. Three independent
-harness runs; the warm-cache column is the stable signal.
+Median of 3 runs, local cache only, no remote cache on any side:
 
 | Tool | Cold | Warm |
 |---|---|---|
-| **b4mal** | 1.7 – 2.1s | **0.14 – 0.16s** |
-| Turborepo | 1.5 – 4.1s | 0.16 – 0.18s |
-| Nx | 0.9 – 1.6s | 0.65 – 0.81s |
+| b4mal | **1.71s** | 0.059s |
+| Turborepo | 1.79s | **0.053s** |
+| Nx | 0.42s | 0.59s |
 
-**b4mal is competitive on cold and now marginally ahead of Turborepo on a warm
-cache.** An earlier revision of this table reported b4mal at 0.39s warm and
-Turborepo ~2× faster; removing the last `tar` process spawns closed that gap.
+**Read this honestly: b4mal does not win on wall-clock.** Cold is a tie (1.71s vs
+1.79s). On a warm cache Turborepo is ahead by roughly 10% (0.053s vs 0.059s). An
+earlier revision of this table, measured on a contended laptop, showed b4mal ahead
+on warm cache; the dedicated runner does not support that claim, so it is corrected
+here. Nx's cold figure benefits from its daemon already being warm from the first
+sample, which is called out below.
 
-Three caveats that materially affect these numbers:
+Caveats that materially affect these numbers:
 
-- **Cold figures are noisy on this machine** (Turbo ranged 1.5–4.1s across runs,
-  largely daemon start-up). Treat cold as a tie within noise; warm is the number
-  that reproduces.
-- **Turbo and Nx keep daemons warm between runs.** Their second and third "cold"
-  runs are daemon-warm; b4mal has no daemon, so every cold run is honestly cold.
-  Nx's true first run can exceed 20s.
-- **This is a small fixture on one machine** (Apple M4, 10 cores). It measures
-  orchestrator overhead against real task durations, not a real monorepo. Treat it
-  as indicative, not publishable.
+- **Nx's cold number is flattered by its daemon** — its first sample (3.7s) primes
+  the daemon and the reported median (0.42s) is from daemon-warm runs. Turbo
+  shows the same effect on warm (1.76s then 0.05s). b4mal has no daemon, so every
+  b4mal run is honestly cold.
+- **This is a small fixture measuring orchestrator overhead** against real task
+  durations, not a real monorepo. Treat it as indicative, not publishable.
+- The workflow **fails rather than publishing** if the runner is contended (a
+  fixed-workload probe varies >1.5×), and the harness refuses to count any run
+  that did not produce the expected outputs.
 
-Warm-restore performance was improved substantially in this release cycle by
-removing process spawns from the artifact path entirely (native zstd + an in-process
-tar reader), taking a 16-artifact cache restore from ~1.7s to ~0.15s.
+Cache-restore performance improved substantially in this release cycle by removing
+process spawns from the artifact path entirely (native zstd + an in-process tar
+reader) — a 16-artifact restore went from ~1.7s to well under 0.1s on this
+hardware.
 
 ### The honest summary
 
-On speed, b4mal is at parity on a cold build and now marginally ahead of Turborepo
-on a warm cache. On correctness it is the only one of the three that can promise
-anything, because it is the only one that checks — and that is the difference that
-matters when a build corrupts an artifact that then poisons every future cache.
+On speed, b4mal is in a tie with Turborepo — marginally ahead cold, marginally
+behind warm. It does not win the benchmark. On correctness it is the only one of
+the three that can promise anything, because it is the only one that checks — and
+that is the difference that matters when a build corrupts an artifact that then
+poisons every future cache, on every machine, forever.
 
 ## Not Yet Implemented
 
