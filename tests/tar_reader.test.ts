@@ -193,6 +193,36 @@ describe("tar reader — agrees with the system tar", () => {
     expect(readFileSync(join(dest, "empty.txt"), "utf-8")).toBe("");
   });
 
+
+  test("accepts the GNU tar header magic", () => {
+    // GNU tar (Linux) writes "ustar " with a space and " \0" as the version;
+    // bsdtar (macOS) writes "ustar\0". A pack()/unpack() round trip on Linux
+    // produced a GNU-magic archive that the reader rejected outright, failing
+    // every artifact restore in CI while macOS passed.
+    const buf = new Uint8Array(1024);
+    const set = (off: number, str: string, len = str.length) => {
+      for (let i = 0; i < len; i++) buf[off + i] = str.charCodeAt(i);
+    };
+    set(0, "file.txt", 100);
+    set(100, "0000644", 8);
+    set(108, "0000000", 8);
+    set(116, "0000000", 8);
+    set(124, "00000000005 ", 12);
+    set(136, "00000000000 ", 12);
+    set(148, "        ", 8);
+    buf[156] = 0x30;               // '0' regular file
+    set(257, "ustar ", 6);         // GNU: space, not NUL
+    set(263, " \0", 2);          // GNU: " "
+    let sum = 0; for (let i = 0; i < 512; i++) sum += buf[i];
+    set(148, sum.toString(8).padStart(6, "0") + "\0 ", 8);
+    const content = "hello";
+    for (let i = 0; i < content.length; i++) buf[512 + i] = content.charCodeAt(i);
+
+    const entries = readTarEntries(buf);
+    expect(entries.length).toBe(1);
+    expect(entries[0].name).toBe("file.txt");
+  });
+
   test("an empty archive yields no entries and does not throw", () => {
     expect(readTarEntries(new Uint8Array(1024))).toEqual([]);
   });

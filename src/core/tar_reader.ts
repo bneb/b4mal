@@ -164,10 +164,12 @@ export function readTarEntries(bytes: Uint8Array): TarEntry[] {
       dataOffset,
     });
     offset = next;
-    // `magic` is read to validate the header shape; an archive we do not
-    // recognise should not be silently treated as ustar.
-    if (magic !== "" && magic !== "ustar") {
-      throw new Error(`archive is not a ustar/pax archive (magic: ${magic})`);
+    // `magic` confirms the header shape, but the accept-set has to include what GNU
+    // tar writes. bsdtar on macOS emits "ustar\0", GNU tar on Linux emits
+    // "ustar " (space) followed by " \0" as the version, and old v7 tar writes no
+    // magic at all. Only reject a magic that is clearly not a tar header.
+    if (magic !== "" && magic !== "ustar" && magic !== "ustar " && magic !== "ustar\0") {
+      throw new Error(`archive is not a ustar/pax archive (magic: ${JSON.stringify(magic)})`);
     }
   }
   return entries;
