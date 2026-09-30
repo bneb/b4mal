@@ -225,16 +225,27 @@ export class ArtifactVault {
         const tarPath = `${archivePath}.unpack-${process.pid}-${Date.now()}.tar`;
 
         try {
-            const decompressProc = Bun.spawn(["zstd", "-d", "-f", archivePath, "-o", tarPath], {
-                stdout: "pipe",
-                stderr: "pipe",
-            });
-            const decompressErr = await new Response(decompressProc.stderr).text();
-            const decompressCode = await decompressProc.exited;
-
-            if (decompressCode !== 0) {
-                throw new Error(`Unpack failed: zstd exited ${decompressCode} (${decompressErr.trim()})`);
+            // Decompress natively rather than shelling out to `zstd -d`.
+            //
+            // Process spawn is the dominant cost on a cache hit: ~40ms each on
+            // this machine, and unpack spawns three (`zstd -d`, `tar -tvf`,
+            // `tar -xf`), so restoring 16 artifacts spent ~1.9s almost entirely
+            // in process startup. Removing the zstd spawn is the difference
+            // between a cache hit costing three spawns per artifact and two.
+            //
+            // `tar` is deliberately still spawned: the entry-type validation
+            // below must complete before anything is extracted, and re-implementing
+            // tar header parsing in JS would put that security check on a much
+            // riskier footing for a modest further saving.
+            const { zstdDecompressSync } = require("bun") as typeof import("bun");
+            const compressed = new Uint8Array(fs.readFileSync(archivePath));
+            let tarBytes: Uint8Array;
+            try {
+                tarBytes = zstdDecompressSync(compressed);
+            } catch (e: any) {
+                throw new Error(`Unpack failed: zstd could not decompress the artifact (${e?.message ?? e})`);
             }
+            fs.writeFileSync(tarPath, tarBytes);
 
             // Entries are validated on two axes before anything is extracted.
             //
