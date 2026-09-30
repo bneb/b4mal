@@ -55,32 +55,22 @@ runs:
         echo "Installing $spec" >> "$GITHUB_STEP_SUMMARY"
         bun add -g "$spec"
 
-    # An action that red-lines every repository it is added to will be removed
-    # from them, so a repository that does not use b4mal is a no-op.
-    - name: Look for a b4mal project
-      id: probe
-      shell: bash
-      run: |
-        if [ -f "${{ inputs.project-path }}/b4mal.config.json" ] || [ -f "${{ inputs.project-path }}/b4mal.lock" ]; then
-          echo "found=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "found=false" >> "$GITHUB_OUTPUT"
-        fi
-
+    # Always runs. The report script no-ops when there is no b4mal project, so a
+    # repository that does not use b4mal is a clean pass rather than a red build.
     - name: Audit the build graph
       id: audit
-      if: steps.probe.outputs.found == 'true'
       shell: bash
       run: |
         report="$RUNNER_TEMP/b4mal-check.json"
-        # Exit 1 means findings, not a crash, so it is captured rather than
-        # aborting the step before the report is read.
+        rm -f "$report"
+        # Exit 1 means findings, not a crash, so it is captured and the report is
+        # read regardless.
         set +e
         bun x b4mal check --json > "$report"
         echo "b4mal check exited $? (1 means findings were reported)"
         set -e
         node "$GITHUB_ACTION_PATH/scripts/b4mal-report.mjs" "$report" \
-          --file "$(basename "$(ls "${{ inputs.project-path }}/b4mal.config.json" 2>/dev/null || ls "${{ inputs.project-path }}/b4mal.lock")")"
+          --file "$(basename "$(ls b4mal.config.json 2>/dev/null || ls b4mal.lock 2>/dev/null || echo b4mal.config.json)")"
       working-directory: ${{ inputs.project-path }}
 
     - name: Summarise
@@ -89,7 +79,7 @@ runs:
       run: |
         {
           echo "### b4mal check"
-          if [ "${{ steps.probe.outputs.found }}" != "true" ]; then
+          if [ "${{ steps.audit.outputs.found }}" != "true" ]; then
             echo "No b4mal.config.json or b4mal.lock under \`${{ inputs.project-path }}\` — nothing to audit."
           else
             echo "findings: ${{ steps.audit.outputs.findings }} (collisions ${{ steps.audit.outputs.collisions }}, shadows ${{ steps.audit.outputs.shadows }}, implicit ${{ steps.audit.outputs.implicit }})"
@@ -99,7 +89,7 @@ runs:
         } >> "$GITHUB_STEP_SUMMARY"
 
     - name: Gate on findings
-      if: steps.probe.outputs.found == 'true' && inputs.fail-on-findings == 'true' && steps.audit.outputs.verified != 'true'
+      if: steps.audit.outputs.found == 'true' && inputs.fail-on-findings == 'true' && steps.audit.outputs.verified != 'true'
       shell: bash
       run: |
         echo "::error::b4mal check found ${{ steps.audit.outputs.findings }} issue(s) in ${{ inputs.project-path }}"
