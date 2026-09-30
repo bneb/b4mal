@@ -1,0 +1,10 @@
+name: verify-action
+on: [push, pull_request]
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bneb/b4mal@main
+        with:
+          fail-on-findings: false
