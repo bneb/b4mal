@@ -109,23 +109,62 @@ function findLineForConflict(text: string, conflict: any): number {
 
 async function validateDocument(uri: string, text: string): Promise<void> {
   try {
-    const tasksRaw = JSON.parse(text);
-    if (!Array.isArray(tasksRaw)) return;
-    const tasks: TaskResourceClaim[] = tasksRaw.map((t: any) => ({
-      id: t.id || "unknown",
-      reads: t.reads || [],
-      writes: t.writes || [],
-      envReads: t.envReads || [],
-      envWrites: t.envWrites || [],
-      claims: t.claims || [],
-    }));
-    const result = await FormalShadow.verifyWave(tasks);
-    const diagnostics = result.conflicts.map((conflict: any) => ({
-      range: { start: { line: findLineForConflict(text, conflict), character: 0 }, end: { line: findLineForConflict(text, conflict), character: 100 } },
-      severity: 1,
-      source: "b4mal",
-      message: `Resource Collision: Task ${conflict.taskA} and ${conflict.taskB} concurrently claim ${conflict.counterexample}`,
-    }));
+    const parsed = JSON.parse(text);
+
+    // Both shapes have to be handled. b4mal.config.json is v2 — an object keyed
+    // by task id under `tasks` — and the flat array is the v1 lockfile form. This
+    // function only recognised the array, so on any v2 config it returned before
+    // reaching the check below and the LSP published no diagnostics at all.
+    // The feature the README advertises ("real-time editor feedback for resource
+    // collisions while editing configuration files") was therefore dead for every
+    // file the tool writes.
+    const raw: any[] = Array.isArray(parsed)
+      ? parsed
+      : Object.entries(parsed?.tasks ?? {}).map(([id, t]) => ({ id, ...(t as any) }));
+
+    const deps = new Map<string, string[]>();
+    const tasks: TaskResourceClaim[] = raw.map((t: any) => {
+      const id = String(t.id ?? "unknown");
+      // v1 names them reads/writes, v2 inputs/outputs; reading only the v1 pair
+      // left every v2 task with empty resources and nothing to collide over.
+      deps.set(id, t.dependencies ?? t.deps ?? []);
+      return {
+        id,
+        reads: t.reads ?? t.inputs ?? [],
+        writes: t.writes ?? t.outputs ?? [],
+        envReads: t.envReads ?? t.needsEnv ?? [],
+        envWrites: t.envWrites ?? t.providesEnv ?? [],
+        claims: t.claims ?? [],
+      };
+    });
+
+    // Report the same findings as `b4mal check`: the shadowing audit, which is
+    // what survives dependency ordering. Previously this called verifyWave, which
+    // is a SAME-WAVE check applied to every task at once — so it flagged ordinary
+    // producer→consumer edges (alpha writes out/a.txt, beta reads it) as
+    // collisions. Those are not conflicts: the planner serializes them, and
+    // `b4mal check` stays silent. An editor that underlines every correct config
+    // is worse than one that underlines nothing.
+    const shadows = await FormalShadow.detectShadowing(tasks, deps);
+    const diagnostics = shadows.map((shadow: any) => {
+      const resource = shadow.resources?.[0] ?? shadow.counterexample;
+      // Two distinct findings, worded as `b4mal check` words them. "masks" is
+      // only right for a write/write overwrite; an implicit dependency has no
+      // overwrite at all, just a missing edge.
+      const message = shadow.kind === "implicit-dependency"
+        ? `${shadow.taskB} reads ${resource} produced by ${shadow.taskA} — no dependency edge is declared`
+        : `${shadow.taskB} masks ${shadow.taskA} at ${resource} — the overwrite is ${shadow.ordering === "implicit" ? "not declared" : "declared"}`;
+
+      return {
+        range: {
+          start: { line: findLineForConflict(text, shadow), character: 0 },
+          end: { line: findLineForConflict(text, shadow), character: 100 },
+        },
+        severity: 2, // warning: the build is ordered, but the ordering is implicit
+        source: "b4mal",
+        message,
+      };
+    });
     sendMessage({ jsonrpc: "2.0", method: "textDocument/publishDiagnostics", params: { uri, diagnostics } });
   } catch {
     // Ignore JSON parse errors while typing

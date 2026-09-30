@@ -85,6 +85,13 @@ describe("Language Server Protocol", () => {
 
         expect(result.params.uri).toBe("file:///path/to/b4mal.lock");
         expect(result.params.diagnostics.length).toBe(1);
-        expect(result.params.diagnostics[0].message).toContain("Resource Collision");
+        // taskA writes dist/ and taskB reads it with no declared edge: an
+        // implicit dependency, which the planner serializes rather than
+        // rejecting. The LSP now reports it as such (matching `b4mal check`)
+        // rather than as a "Resource Collision" — a read-after-write is not a
+        // conflict, and flagging every declared producer/consumer pair as an
+        // error is what made the editor's output unusable.
+        expect(result.params.diagnostics[0].message).toMatch(/no dependency edge is declared/);
+        expect(result.params.diagnostics[0].severity).toBe(2); // warning, not error
     });
 });
