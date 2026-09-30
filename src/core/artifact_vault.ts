@@ -236,6 +236,51 @@ export class ArtifactVault {
                 throw new Error(`Unpack failed: zstd exited ${decompressCode} (${decompressErr.trim()})`);
             }
 
+            // Entries are validated on two axes before anything is extracted.
+            //
+            // Names alone are not enough to describe an archive. A tar entry can be
+            // a symlink: "escape -> /somewhere" followed by "escape/file" is a
+            // classic extraction attack, and both names here pass a name-only check.
+            //
+            // Measured: bsdtar (macOS) refuses this itself —
+            //   "Cannot extract through symlink escape/written.txt"
+            // — and exits non-zero, which the caller turns into a thrown error. So
+            // this is not a hole being closed on that platform. The rejection is
+            // explicit and happens *before* extraction rather than relying on the
+            // tar implementation's own policy, which differs across platforms and
+            // versions, and it produces a clear message instead of a tar error.
+            //
+            // pack() never produces link entries — secureCopy opens with
+            // O_NOFOLLOW and skips anything that is not a regular file or directory
+            // — so an archive containing one did not come from pack(), and rejecting
+            // links cannot break a legitimate artifact.
+            const typedListProc = Bun.spawn(["tar", "-tvf", tarPath], {
+                stdout: "pipe",
+                stderr: "pipe",
+            });
+            const typedList = await new Response(typedListProc.stdout).text();
+            const typedCode = await typedListProc.exited;
+
+            if (typedCode !== 0) {
+                const typedErr = await new Response(typedListProc.stderr).text();
+                throw new Error(`Unpack failed: could not list archive types (${typedErr.trim()})`);
+            }
+
+            const TYPE_LABELS: Record<string, string> = {
+                l: "symlink", h: "hard link", b: "block device",
+                c: "character device", p: "FIFO", s: "socket",
+            };
+
+            for (const line of typedList.split("\n")) {
+                if (!line.trim()) continue;
+                const type = line[0];
+                if (type === "-" || type === "d") continue; // regular file, directory
+                const kind = TYPE_LABELS[type] ?? `unrecognised (${JSON.stringify(type)})`;
+                throw new Error(
+                    `Unpack rejected: archive contains a ${kind} entry: ${line.slice(0, 120)}`
+                );
+            }
+
             // List archive contents and verify no path traversal before extracting.
             // macOS bsdtar extracts ../ entries by default; GNU tar >= 1.29 blocks them,
             // but we verify explicitly for defense in depth across all platforms.
